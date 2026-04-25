@@ -179,9 +179,14 @@ Place the restaurant's menu card / coaster photo as `targets/anchor.jpg` before 
 
 | Variable | App | Description |
 |---|---|---|
+| `SESSION_SECRET` | Dashboard | Random string ≥32 chars — signs the session cookie. **Required in production.** |
+| `DASHBOARD_EMAIL` | Dashboard | Admin login email (default: `admin@paladeium.com`) |
+| `DASHBOARD_PASSWORD` | Dashboard | Admin login password (default: `changeme`) **Change this!** |
+| `UPSTASH_REDIS_REST_URL` | Dashboard | Upstash Redis REST URL for persistent storage |
+| `UPSTASH_REDIS_REST_TOKEN` | Dashboard | Upstash Redis REST token |
 | `LENS_URL` | Dashboard | URL of the deployed lens (shown in AR link copy box) |
-| `KV_REST_API_URL` | Dashboard | Auto-injected by Vercel KV |
-| `KV_REST_API_TOKEN` | Dashboard | Auto-injected by Vercel KV |
+
+Generate a `SESSION_SECRET` with: `openssl rand -base64 32`
 
 All other vars are in [docs/.env.example](docs/.env.example) for future phases.
 

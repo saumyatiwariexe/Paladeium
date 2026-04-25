@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { readDb, writeDb } from '@/lib/db'
 import { v4 as uuid } from 'uuid'
+
+const RestaurantSchema = z.object({
+  name: z.string().min(1).max(100).trim(),
+  slug: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers, and hyphens only')
+    .trim(),
+  description: z.string().max(500).optional().default(''),
+  status: z.enum(['active', 'inactive']).optional().default('active'),
+})
 
 export async function GET() {
   const db = await readDb()
@@ -8,13 +21,15 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json()
-  const { name, slug, description, status } = body
+  const body = await req.json().catch(() => null)
+  const parsed = RestaurantSchema.safeParse(body)
 
-  if (!name?.trim() || !slug?.trim()) {
-    return NextResponse.json({ error: 'Name and slug are required' }, { status: 422 })
+  if (!parsed.success) {
+    const message = parsed.error.errors[0]?.message ?? 'Invalid request'
+    return NextResponse.json({ error: message }, { status: 422 })
   }
 
+  const { name, slug, description, status } = parsed.data
   const db = await readDb()
 
   if (db.restaurants.some(r => r.slug === slug)) {
@@ -24,10 +39,10 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString()
   const restaurant = {
     id: uuid(),
-    name: name.trim(),
-    slug: slug.trim(),
-    description: description?.trim() ?? '',
-    status: status ?? 'active',
+    name,
+    slug,
+    description,
+    status,
     createdAt: now,
     updatedAt: now,
   }

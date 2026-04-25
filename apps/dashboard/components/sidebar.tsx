@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 const nav = [
   { label: 'Restaurants', href: '/restaurants', icon: '🏪' },
@@ -8,6 +9,15 @@ const nav = [
 
 export default function Sidebar() {
   const path = usePathname()
+  const router = useRouter()
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  async function handleLogout() {
+    setLoggingOut(true)
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+    router.refresh()
+  }
 
   return (
     <aside className="w-60 shrink-0 bg-[#0F0F1A] border-r border-white/5 flex flex-col">
@@ -39,9 +49,19 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-5 py-4 border-t border-white/5 flex items-center gap-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-        <span className="text-white/25 text-xs">v1.0 MVP</span>
+      <div className="px-5 py-4 border-t border-white/5 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-white/25 text-xs">v1.0 MVP</span>
+        </div>
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-all disabled:opacity-50"
+        >
+          <span>↪</span>
+          <span>{loggingOut ? 'Signing out…' : 'Sign out'}</span>
+        </button>
       </div>
     </aside>
   )

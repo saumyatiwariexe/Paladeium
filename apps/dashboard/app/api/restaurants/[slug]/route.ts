@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { readDb, writeDb } from '@/lib/db'
 
 type Params = { params: { slug: string } }
+
+const RestaurantUpdateSchema = z.object({
+  name: z.string().min(1).max(100).trim().optional(),
+  description: z.string().max(500).optional(),
+  status: z.enum(['active', 'inactive']).optional(),
+}).strict()
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const db = await readDb()
@@ -19,16 +26,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const body = await req.json()
+  const body = await req.json().catch(() => null)
+  const parsed = RestaurantUpdateSchema.safeParse(body)
+
+  if (!parsed.success) {
+    const message = parsed.error.errors[0]?.message ?? 'Invalid request'
+    return NextResponse.json({ error: message }, { status: 422 })
+  }
+
   const db = await readDb()
   const idx = db.restaurants.findIndex(r => r.slug === params.slug || r.id === params.slug)
   if (idx === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   db.restaurants[idx] = {
     ...db.restaurants[idx],
-    ...body,
-    id: db.restaurants[idx].id,
-    slug: db.restaurants[idx].slug,
+    ...parsed.data,
     updatedAt: new Date().toISOString(),
   }
   await writeDb(db)

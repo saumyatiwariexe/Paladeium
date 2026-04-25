@@ -1,9 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { readDb, writeDb } from '@/lib/db'
 import { v4 as uuid } from 'uuid'
 import type { LensMenuResponse } from '@/lib/types'
 
 type Params = { params: { slug: string } }
+
+const MenuItemSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100).trim(),
+  description: z.string().max(500).optional().default(''),
+  price: z.number().min(0).max(100_000),
+  emoji: z.string().max(10).optional().default('🍽'),
+  categoryId: z.string().optional(),
+  newCategoryName: z.string().max(50).optional(),
+  newCategoryEmoji: z.string().max(10).optional(),
+  modelUrl: z.string().max(200).optional().default(''),
+  hasAr: z.boolean().optional().default(false),
+  dietaryTags: z.array(z.string().max(50)).max(10).optional().default([]),
+  available: z.boolean().optional().default(true),
+  imageUrl: z.string().max(500).optional().default(''),
+})
 
 // GET /api/restaurants/[slug]/menu — public, consumed by AR Lens
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -49,9 +65,17 @@ export async function GET(_req: NextRequest, { params }: Params) {
   return NextResponse.json(response)
 }
 
-// POST /api/restaurants/[slug]/menu — add menu item
+// POST /api/restaurants/[slug]/menu — add menu item (requires auth via middleware)
 export async function POST(req: NextRequest, { params }: Params) {
-  const body = await req.json()
+  const body = await req.json().catch(() => null)
+  const parsed = MenuItemSchema.safeParse(body)
+
+  if (!parsed.success) {
+    const message = parsed.error.errors[0]?.message ?? 'Invalid request'
+    return NextResponse.json({ error: message }, { status: 422 })
+  }
+
+  const data = parsed.data
   const db = await readDb()
 
   const restaurant =
@@ -59,37 +83,33 @@ export async function POST(req: NextRequest, { params }: Params) {
     db.restaurants.find(r => r.id === params.slug)
   if (!restaurant) return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 })
 
-  let categoryId = body.categoryId as string
-  if (categoryId === '__new__' || (!categoryId && body.newCategoryName)) {
+  let categoryId = data.categoryId ?? ''
+  if (categoryId === '__new__' || (!categoryId && data.newCategoryName)) {
     const existingCats = db.categories.filter(c => c.restaurantId === restaurant.id)
     const newCat = {
       id: uuid(),
       restaurantId: restaurant.id,
-      name: body.newCategoryName ?? 'Other',
-      emoji: body.newCategoryEmoji ?? '🍽',
+      name: data.newCategoryName ?? 'Other',
+      emoji: data.newCategoryEmoji ?? '🍽',
       sortOrder: existingCats.length + 1,
     }
     db.categories.push(newCat)
     categoryId = newCat.id
   }
 
-  if (!body.name?.trim()) {
-    return NextResponse.json({ error: 'Name is required' }, { status: 422 })
-  }
-
   const item = {
     id: uuid(),
     restaurantId: restaurant.id,
     categoryId,
-    name: body.name.trim(),
-    description: body.description?.trim() ?? '',
-    price: Number(body.price) || 0,
-    emoji: body.emoji?.trim() || '🍽',
-    imageUrl: body.imageUrl ?? '',
-    modelUrl: body.modelUrl?.trim() ?? '',
-    hasAr: Boolean(body.hasAr),
-    dietaryTags: Array.isArray(body.dietaryTags) ? body.dietaryTags : [],
-    available: body.available !== false,
+    name: data.name,
+    description: data.description,
+    price: data.price,
+    emoji: data.emoji,
+    imageUrl: data.imageUrl,
+    modelUrl: data.modelUrl,
+    hasAr: data.hasAr,
+    dietaryTags: data.dietaryTags,
+    available: data.available,
     createdAt: new Date().toISOString(),
   }
 
