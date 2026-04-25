@@ -1,0 +1,42 @@
+# Claude Code internal settings
+.claude/
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js build output
+apps/dashboard/.next/
+apps/dashboard/out/
+
+# Environment files — never commit real secrets
+.env
+.env.local
+.env.production
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel deployment metadata
+.vercel
+
+# Build artifacts
+dist/
+build/
+
+# Logs
+*.log
+cf.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/settings.json
+.idea/
+
+# Note: apps/dashboard/data/db.json is intentionally tracked — it is the seed file.
+# In production (Vercel KV), writes go to KV and do not modify this file.

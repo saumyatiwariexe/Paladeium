@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Paladeium — AR Menu</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+
+  <!-- Catch all errors so they don't fail silently -->
+  <script>
+    window.addEventListener('error', function(e) {
+      alert("Script Error: " + e.message + "\nAt: " + e.filename + ":" + e.lineno);
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      alert("Promise Error: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
+    });
+  </script>
+
+  <!-- ES Module Shims: Polyfill for import maps in older browsers (e.g. iOS < 16.4) -->
+  <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+
+  <!-- Importmap for Three.js and MindAR (ES Modules) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+    }
+  }
+  </script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --gold:    #D4A853;
+      --gold-lt: #F0C97A;
+      --dark:    #0A0A0F;
+      --card-bg: rgba(10, 10, 20, 0.82);
+      --border:  rgba(212, 168, 83, 0.25);
+      --text:    #F0EDE8;
+      --muted:   rgba(240,237,232,0.55);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--dark);
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── AR Canvas Container ─── */
+    #ar-container {
+      position: fixed; inset: 0;
+      z-index: 0;
+    }
+    /* Only force full size for MindAR's own canvas, not demo canvas */
+    #ar-container > canvas.mindar-canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    /* Demo canvas always fills viewport */
+    #demo-canvas {
+      position: absolute !important;
+      inset: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* ─── Scanning Overlay ─── */
+    #scan-overlay {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(10, 10, 15, 0.72);
+      backdrop-filter: blur(2px);
+      transition: all 0.6s ease;
+    }
+    #scan-overlay.hidden { opacity: 0; pointer-events: none; }
+    /* When camera is active but target not yet found */
+    #scan-overlay.scanning-mode {
+      background: transparent;
+      backdrop-filter: none;
+    }
+
+    .scan-frame {
+      width: 220px; height: 220px;
+      position: relative;
+      margin-bottom: 28px;
+    }
+    .scan-frame::before, .scan-frame::after,
+    .scan-frame .c3, .scan-frame .c4 {
+      content: '';
+      position: absolute;
+      width: 36px; height: 36px;
+      border-color: var(--gold);
+      border-style: solid;
+    }
+    .scan-frame::before { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+    .scan-frame::after  { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+    .scan-frame .c3 { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+    .scan-frame .c4 { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+
+    .scan-line {
+      position: absolute;
+      left: 8px; right: 8px; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      animation: scanMove 2.2s ease-in-out infinite;
+      box-shadow: 0 0 12px var(--gold);
+    }
+    @keyframes scanMove {
+      0%   { top: 12px; opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { top: calc(100% - 14px); opacity: 0; }
+    }
+
+    #scan-overlay h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+    #scan-overlay p {
+      font-size: 13px; color: var(--muted);
+      text-align: center; max-width: 220px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    #start-ar-btn {
+      background: var(--gold);
+      color: #0A0A0F;
+      border: none; border-radius: 50px;
+      padding: 14px 32px;
+      font-size: 15px; font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer; letter-spacing: 0.3px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 24px rgba(212,168,83,0.35);
+    }
+    #start-ar-btn:active { transform: scale(0.96); }
+    #start-ar-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #ar-init-status {
+      margin-top: 14px; font-size: 12px; color: var(--muted);
+      min-height: 18px; text-align: center;
+    }
+
+    /* ─── Top Status Bar ─── */
+    #status-bar {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 50;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px 12px;
+      background: linear-gradient(180deg, rgba(10,10,15,0.9) 0%, transparent 100%);
+      pointer-events: none;
+    }
+    .brand {
+      font-family: 'Playfair Display', serif;
+      font-size: 17px; font-weight: 700;
+      letter-spacing: 0.8px;
+      color: var(--gold);
+    }
+    .brand span { color: var(--text); font-weight: 300; }
+    #anchor-status {
+      font-size: 11px; font-weight: 500; letter-spacing: 0.6px;
+      padding: 4px 10px; border-radius: 20px;
+      background: rgba(212,168,83,0.12);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      display: flex; align-items: center; gap: 6px;
+      transition: all 0.4s ease;
+    }
+    #anchor-status.found {
+      background: rgba(80,200,80,0.12);
+      border-color: rgba(80,200,80,0.35);
+      color: rgb(140,230,140);
+    }
+    .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+    /* ─── Floating Menu Panel ─── */
+    #menu-panel {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 40;
+      transform: translateY(100%);
+      transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+      padding: 0 12px 20px;
+    }
+    #menu-panel.visible { transform: translateY(0); }
+    #menu-panel.minimized { transform: translateY(calc(100% - 70px)); }
+
+    .menu-handle-container {
+      width: 100%;
+      cursor: pointer;
+      padding-top: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .menu-handle {
+      width: 40px; height: 4px; border-radius: 2px;
+      background: var(--border);
+      margin: 0 auto 14px;
+    }
+
+    .menu-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 20px 18px 16px;
+      box-shadow: 0 -8px 48px rgba(0,0,0,0.6), 0 0 0 0.5px rgba(255,255,255,0.04);
+    }
+
+    .menu-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .menu-header h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 20px; font-weight: 700;
+      color: var(--text);
+    }
+    .menu-header .subtitle {
+      font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase;
+      color: var(--gold); font-weight: 500;
+    }
+
+    /* Category pills */
+    .categories {
+      display: flex; gap: 8px;
+      overflow-x: auto; margin-bottom: 16px;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .categories::-webkit-scrollbar { display: none; }
+    .cat-pill {
+      flex-shrink: 0;
+      padding: 6px 14px; border-radius: 20px;
+      font-size: 12px; font-weight: 500; letter-spacing: 0.3px;
+      border: 1px solid var(--border);
+      background: transparent; color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .cat-pill.active {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: #0A0A0F; font-weight: 600;
+    }
+
+    /* Dish grid */
+    .dish-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .dish-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 12px;
+      cursor: pointer;
+      transition: all 0.22s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .dish-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(212,168,83,0.08) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .dish-card:active { transform: scale(0.97); }
+    .dish-card.active {
+      border-color: var(--gold);
+      background: rgba(212,168,83,0.08);
+    }
+    .dish-card.active::before { opacity: 1; }
+
+    .dish-emoji { font-size: 28px; margin-bottom: 8px; display: block; }
+    .dish-name {
+      font-size: 13px; font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+      line-height: 1.3;
+    }
+    .dish-desc {
+      font-size: 10px; color: var(--muted);
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .dish-price {
+      font-size: 14px; font-weight: 700;
+      color: var(--gold);
+      font-family: 'Playfair Display', serif;
+    }
+    .dish-ar-badge {
+      position: absolute; top: 8px; right: 8px;
+      font-size: 9px; font-weight: 600; letter-spacing: 0.5px;
+      padding: 2px 7px; border-radius: 6px;
+      background: rgba(212,168,83,0.15);
+      border: 1px solid rgba(212,168,83,0.3);
+      color: var(--gold);
+    }
+
+    /* ─── 3D Viewer Hint ─── */
+    #ar-hint {
+      position: fixed; bottom: 380px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      z-index: 45;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 8px 18px;
+      font-size: 12px; color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+      opacity: 0;
+      transition: all 0.5s ease;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #ar-hint.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    #ar-hint .hint-icon { font-size: 16px; }
+
+    /* ─── No Anchor Prompt ─── */
+    #no-anchor-msg {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      z-index: 45;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 22px;
+      text-align: center;
+      font-size: 13px; color: var(--muted);
+      opacity: 0;
+      transition: all 0.4s ease;
+      pointer-events: none;
+    }
+    #no-anchor-msg.visible {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    #no-anchor-msg .icon { font-size: 28px; margin-bottom: 8px; }
+    #no-anchor-msg p { line-height: 1.5; }
+    #no-anchor-msg strong { color: var(--gold); }
+
+    /* ─── Loading Spinner ─── */
+    #model-loading {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 60;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 14px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    #model-loading.visible { opacity: 1; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 2px solid rgba(212,168,83,0.2);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #model-loading p {
+      font-size: 12px; color: var(--muted);
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- AR Canvas will render here -->
+  <div id="ar-container"></div>
+
+  <!-- Top bar -->
+  <div id="status-bar">
+    <div class="brand">Paladeium<span> Lens</span></div>
+    <div id="anchor-status">
+      <div class="dot"></div>
+      <span id="status-text">Scanning…</span>
+    </div>
+  </div>
+
+  <!-- Scanning overlay -->
+  <div id="scan-overlay">
+    <div class="scan-frame">
+      <div class="scan-line"></div>
+      <div class="c3"></div>
+      <div class="c4"></div>
+    </div>
+    <h2>AR Menu</h2>
+    <p>Point your camera at the menu card to see dishes in 3D</p>
+    <button id="start-ar-btn" onclick="handleStartAR()">&#x1F4F7; Tap to Start AR</button>
+    <div id="ar-init-status"></div>
+  </div>
+
+  <!-- No anchor message (shown when menu tap but no anchor) -->
+  <div id="no-anchor-msg">
+    <div class="icon">🎯</div>
+    <p>Point at the <strong>menu card</strong> first so the dish appears in AR</p>
+  </div>
+
+  <!-- 3D model loading indicator -->
+  <div id="model-loading">
+    <div class="spinner"></div>
+    <p>Loading 3D model…</p>
+  </div>
+
+  <!-- Pinch-to-rotate hint -->
+  <div id="ar-hint">
+    <span class="hint-icon">✌️</span>
+    <span>Pinch &amp; drag to rotate</span>
+  </div>
+
+  <!-- Floating bottom menu panel -->
+  <div id="menu-panel">
+    <div class="menu-handle-container" id="menu-toggle">
+      <div class="menu-handle"></div>
+    </div>
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Our Menu</h3>
+        <span class="subtitle">Tap to view in AR</span>
+      </div>
+
+      <!-- Category pills -->
+      <div class="categories" id="categories">
+        <button class="cat-pill active" data-cat="all">All</button>
+        <button class="cat-pill" data-cat="mains">Mains</button>
+        <button class="cat-pill" data-cat="starters">Starters</button>
+        <button class="cat-pill" data-cat="drinks">Drinks</button>
+        <button class="cat-pill" data-cat="desserts">Desserts</button>
+      </div>
+
+      <!-- Dish Grid -->
+      <div class="dish-grid" id="dish-grid"></div>
+    </div>
+  </div>
+
+  <script src="./config.js"></script>
+  <script>
+    // UI logic is now synchronous, ensuring buttons always work.
+    // 3D/AR libraries will be loaded dynamically on user interaction.
+
+    // ─────────────────────────────────────────────
+    // CONFIG — edit config.js to set the dashboard URL
+    // ─────────────────────────────────────────────
+    const DASHBOARD_API = window.__PALADEIUM_API__ || 'http://localhost:3000';
+    let TARGETS_SRC = './targets/targets.mind';
+
+    // ─────────────────────────────────────────────
+    // MENU DATA — default fallback, replaced by API when ?r=slug is set
+    // ─────────────────────────────────────────────
+    let MENU = [
+      {
+        id: 'burger',
+        name: 'Wagyu Smash Burger',
+        desc: 'Double patty, aged cheddar, truffle aioli',
+        price: '₹649',
+        emoji: '🍔',
+        cat: 'mains',
+        model: 'burger.glb',
+        hasAR: true,
+      },
+      {
+        id: 'pizza',
+        name: 'Margherita Classico',
+        desc: 'San Marzano tomato, buffalo mozzarella',
+        price: '₹549',
+        emoji: '🍕',
+        cat: 'mains',
+        model: null,
+        hasAR: false,
+      },
+      {
+        id: 'pasta',
+        name: 'Cacio e Pepe',
+        desc: 'Tonnarelli, romano, tellicherry pepper',
+        price: '₹479',
+        emoji: '🍝',
+        cat: 'mains',
+        model: null,
+        hasAR: false,
+      },
+      {
+        id: 'salad',
+        name: 'Caesar Deluxe',
+        desc: 'Romaine, house dressing, parmesan crisp',
+        price: '₹329',
+        emoji: '🥗',
+        cat: 'starters',
+        model: null,
+        hasAR: false,
+      },
+      {
+        id: 'mojito',
+        name: 'Virgin Mojito',
+        desc: 'Fresh lime, mint, soda, brown sugar',
+        price: '₹199',
+        emoji: '🍹',
+        cat: 'drinks',
+        model: null,
+        hasAR: false,
+      },
+      {
+        id: 'lava',
+        name: 'Chocolate Lava Cake',
+        desc: 'Warm Valrhona centre, vanilla bean ice cream',
+        price: '₹299',
+        emoji: '🍫',
+        cat: 'desserts',
+        model: null,
+        hasAR: false,
+      },
+    ];
+
+    // ─────────────────────────────────────────────
+    // STATE
+    // ─────────────────────────────────────────────
+    let anchorFound   = false;
+    let activeDishId  = null;
+    let arModel       = null;   // Three.js Group loaded from GLB
+    let activeCategory = 'all';
+
+    // ─────────────────────────────────────────────
+    // DOM REFS
+    // ─────────────────────────────────────────────
+    const scanOverlay   = document.getElementById('scan-overlay');
+    const statusDot     = document.querySelector('.dot');
+    const statusText    = document.getElementById('status-text');
+    const anchorStatus  = document.getElementById('anchor-status');
+    const menuPanel     = document.getElementById('menu-panel');
+    const dishGrid      = document.getElementById('dish-grid');
+    const modelLoading  = document.getElementById('model-loading');
+    const arHint        = document.getElementById('ar-hint');
+    const noAnchorMsg   = document.getElementById('no-anchor-msg');
+    const catContainer  = document.getElementById('categories');
+
+    // ─────────────────────────────────────────────
+    // RENDER MENU
+    // ─────────────────────────────────────────────
+    function renderMenu(cat) {
+      const items = cat === 'all' ? MENU : MENU.filter(d => d.cat === cat);
+      dishGrid.innerHTML = items.map(dish => `
+        <div class="dish-card ${dish.id === activeDishId ? 'active' : ''}"
+             id="dish-${dish.id}"
+             onclick="selectDish('${dish.id}')">
+          ${dish.hasAR ? '<span class="dish-ar-badge">AR</span>' : ''}
+          <span class="dish-emoji">${dish.emoji}</span>
+          <div class="dish-name">${dish.name}</div>
+          <div class="dish-desc">${dish.desc}</div>
+          <div class="dish-price">${dish.price}</div>
+        </div>
+      `).join('');
+    }
+
+    // Category pill click
+    catContainer.addEventListener('click', e => {
+      const pill = e.target.closest('.cat-pill');
+      if (!pill) return;
+      document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      activeCategory = pill.dataset.cat;
+      renderMenu(activeCategory);
+    });
+
+    // ─────────────────────────────────────────────
+    // DYNAMIC CATEGORIES + ASYNC INIT
+    // ─────────────────────────────────────────────
+    function renderCategories(cats) {
+      catContainer.innerHTML =
+        '<button class="cat-pill active" data-cat="all">All</button>' +
+        cats.map(c =>
+          `<button class="cat-pill" data-cat="${c.name.toLowerCase()}">${c.emoji} ${c.name}</button>`
+        ).join('');
+    }
+
+    async function init() {
+      const slug = new URLSearchParams(location.search).get('r');
+      if (slug) {
+        try {
+          const res = await fetch(`${DASHBOARD_API}/api/restaurants/${slug}/menu`);
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.menu) && data.menu.length) MENU = data.menu;
+            if (data.restaurant?.name) document.title = `${data.restaurant.name} — AR Menu`;
+            if (data.restaurant?.targetsUrl) TARGETS_SRC = data.restaurant.targetsUrl;
+            if (Array.isArray(data.categories) && data.categories.length) {
+              renderCategories(data.categories);
+            }
+          }
+        } catch (e) {
+          console.warn('[Paladeium] API unavailable, using default menu');
+        }
+      }
+      renderMenu('all');
+    }
+
+    init();
+
+    // Menu toggle and swipe logic
+    let touchStartY = 0;
+    const swipeThreshold = 50;
+
+    const menuToggle = document.getElementById('menu-toggle');
+    menuToggle.addEventListener('click', () => {
+      menuPanel.classList.toggle('minimized');
+    });
+
+    // Detect swipes on the header area
+    menuPanel.addEventListener('touchstart', e => {
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    menuPanel.addEventListener('touchend', e => {
+      const touchEndY = e.changedTouches[0].clientY;
+      const deltaY = touchEndY - touchStartY;
+
+      if (Math.abs(deltaY) > swipeThreshold) {
+        if (deltaY > 0) {
+          // Swipe Down -> Hide
+          menuPanel.classList.add('minimized');
+        } else {
+          // Swipe Up -> Show
+          menuPanel.classList.remove('minimized');
+        }
+      }
+    }, { passive: true });
+
+    // ─────────────────────────────────────────────
+    // GLOBALS for AR objects (set later if AR available)
+    // ─────────────────────────────────────────────
+    let mindarThree, renderer, scene, camera;
+    let anchors = []; // Array to hold 5 perspective anchors
+    let activeAnchor = null; // The anchor currently driving the view
+
+
+    // ─────────────────────────────────────────────
+    // DISH SELECTION
+    // ─────────────────────────────────────────────
+    function selectDish(dishId) {
+      const dish = MENU.find(d => d.id === dishId);
+      if (!dish) return;
+
+      // Update active state
+      document.querySelectorAll('.dish-card').forEach(c => c.classList.remove('active'));
+      const card = document.getElementById('dish-' + dishId);
+      if (card) card.classList.add('active');
+
+      if (!dish.model) {
+        activeDishId = dishId;
+        clearArModel();
+        showNoAnchorMsg(false);
+        return;
+      }
+
+      if (!anchorFound) {
+        showNoAnchorMsg(true);
+        return;
+      }
+
+      // Load model
+      loadArModel(dish.model);
+    }
+
+    function showNoAnchorMsg(show) {
+      noAnchorMsg.classList.toggle('visible', show);
+      if (show) setTimeout(() => noAnchorMsg.classList.remove('visible'), 3000);
+    }
+
+    function clearArModel() {
+      if (arModel) {
+        // Remove from all potential anchor parents
+        anchors.forEach(a => a.group.remove(arModel));
+        arModel = null;
+      }
+    }
+
+    function loadArModel(filename) {
+      clearArModel();
+      modelLoading.classList.add('visible');
+      
+      // Safety check for library
+      if (!window.THREE || !window.THREE.GLTFLoader) {
+        console.error('3D Libraries not ready');
+        modelLoading.classList.remove('visible');
+        return;
+      }
+
+      const gltfLoader = new window.THREE.GLTFLoader();
+
+      gltfLoader.load(
+        './' + encodeURIComponent(filename),
+        (gltf) => {
+          modelLoading.classList.remove('visible');
+          arModel = gltf.scene;
+
+          // Center + sit flush on anchor (Lower Y offset = better angle stability)
+          const box = new window.THREE.Box3().setFromObject(arModel);
+          const size = new window.THREE.Vector3();
+          box.getSize(size);
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const targetSize = 0.18; // ~18cm in AR space
+          const scale = targetSize / maxDim;
+          arModel.scale.setScalar(scale);
+
+          const center = new window.THREE.Vector3();
+          box.getCenter(center);
+          arModel.position.set(-center.x * scale, -center.y * scale + 0.02, -center.z * scale);
+
+          // If an anchor is already found, attach it immediately
+          if (activeAnchor) activeAnchor.group.add(arModel);
+
+          // Show rotation hint
+          arHint.classList.add('visible');
+          setTimeout(() => arHint.classList.remove('visible'), 4000);
+        },
+        (progress) => {
+          // optional progress
+        },
+        (error) => {
+          console.error('GLB load error:', error);
+          modelLoading.classList.remove('visible');
+        }
+      );
+    }
+
+
+    // ─────────────────────────────────────────────
+    // TOUCH — drag to rotate 3D model (AR mode)
+    // ─────────────────────────────────────────────
+    let isDragging  = false;
+    let lastTouchX  = 0;
+    let lastTouchY  = 0;
+    let lastPinchDist = null;
+
+    const arContainer = document.getElementById('ar-container');
+
+    arContainer.addEventListener('touchstart', e => {
+      if (e.touches.length === 1 && arModel) {
+        isDragging = true;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      }
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        lastPinchDist = Math.hypot(dx, dy);
+      }
+    }, { passive: true });
+
+    arContainer.addEventListener('touchmove', e => {
+      if (isDragging && arModel && e.touches.length === 1) {
+        arModel.rotation.y += (e.touches[0].clientX - lastTouchX) * 0.012;
+        arModel.rotation.x += (e.touches[0].clientY - lastTouchY) * 0.008;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      }
+      if (e.touches.length === 2 && arModel && lastPinchDist) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        const factor = dist / lastPinchDist;
+        arModel.scale.multiplyScalar(factor);
+        const s = arModel.scale.x;
+        if (s < 0.04) arModel.scale.setScalar(0.04);
+        if (s > 0.6)  arModel.scale.setScalar(0.6);
+        lastPinchDist = dist;
+      }
+    }, { passive: true });
+
+    arContainer.addEventListener('touchend', () => { isDragging = false; lastPinchDist = null; });
+
+    // ─────────────────────────────────────────────
+    // START AR — targets.mind checked FIRST, MindAR only init if available
+    // ─────────────────────────────────────────────
+    const clock = {
+      getElapsedTime: () => {
+        if (!window._startTime) window._startTime = Date.now();
+        return (Date.now() - window._startTime) / 1000;
+      }
+    };
+
+    async function startAR() {
+      console.log('[AR] Starting MindAR...');
+      const initStatus = document.getElementById('ar-init-status');
+      if (initStatus) initStatus.textContent = 'Requesting camera access…';
+
+      // Init MindAR
+      try {
+        mindarThree = new window.MINDAR.IMAGE.MindARThree({
+          container: document.getElementById('ar-container'),
+          imageTargetSrc: TARGETS_SRC,
+          maxTrack: 1,
+          uiLoading: 'no',
+          uiScanning: 'no',
+          uiError: 'no',
+          filterMinCF: 0.00001,
+          filterBeta:  0.01,    
+          warmupTolerance: 12,
+          missTolerance: 30,     // Doubled to keep lock at steep angles
+        });
+
+        renderer = mindarThree.renderer;
+        scene    = mindarThree.scene;
+        camera   = mindarThree.camera;
+
+        // Lighting
+        scene.add(new window.THREE.AmbientLight(0xffffff, 1.4));
+        const dl = new window.THREE.DirectionalLight(0xfff5e0, 2.2);
+        dl.position.set(1, 3, 2); scene.add(dl);
+        const fl = new window.THREE.DirectionalLight(0xd4a853, 0.8);
+        fl.position.set(-2, 1, -1); scene.add(fl);
+
+        // Instantiate 5 anchors for multi-perspective tracking
+        for (let i = 0; i < 5; i++) {
+          const a = mindarThree.addAnchor(i);
+          
+          a.onTargetFound = () => {
+            activeAnchor = a;
+            anchorFound = true;
+            scanOverlay.classList.add('hidden');
+            menuPanel.classList.add('visible');
+            menuPanel.classList.remove('minimized');
+            anchorStatus.classList.add('found');
+            statusText.textContent = 'Anchor locked';
+            
+            if (activeDishId) {
+              const dish = MENU.find(d => d.id === activeDishId);
+              if (dish?.model && !arModel) {
+                loadArModel(dish.model);
+              } else if (arModel) {
+                a.group.add(arModel); // Switch model to this anchor
+              }
+            }
+          };
+
+          a.onTargetLost = () => {
+             // Only mark lost if this was the active anchor
+             if (activeAnchor === a) {
+               activeAnchor = null;
+               anchorFound = false;
+               anchorStatus.classList.remove('found');
+               statusText.textContent = 'Scanning…';
+             }
+          };
+          
+          anchors.push(a);
+        }
+
+        // AR animation loop
+        renderer.setAnimationLoop(() => {
+          if (arModel) {
+            const t = clock.getElapsedTime();
+            // Reduced hover height to prevent parallax sliding
+            arModel.position.y = 0.02 + Math.sin(t * 1.2) * 0.004;
+            if (!isDragging) arModel.rotation.y += 0.005;
+          }
+          mindarThree.renderer.render(scene, camera);
+        });
+
+        console.log('[AR] MindAR initialized, calling start()...');
+        await mindarThree.start();
+        console.log('[AR] MindAR started successfully ✓');
+        
+        // Update UI to show the camera feed clearly for scanning
+        const overlay = document.getElementById('scan-overlay');
+        overlay.classList.add('scanning-mode');
+        const btn = document.getElementById('start-ar-btn');
+        btn.style.display = 'none';
+        const initStatus = document.getElementById('ar-init-status');
+        if (initStatus) initStatus.textContent = 'Point camera at the menu card to scan';
+
+      } catch (err) {
+        console.error('[AR] MindAR failed:', err.message, err);
+        alert('AR Camera Failed: ' + err.message + '\n\nFalling back to Demo Mode. Check browser camera permissions.');
+        anchor = null;
+        showDemoMode();
+      }
+    }
+
+    // Dynamic loading function safely reused
+    async function getThreeLibs() {
+      if (window.THREE && window.THREE.GLTFLoader) return window.THREE;
+      statusText.textContent = 'Connecting to 3D engine…';
+      
+      const [THREE, { GLTFLoader }] = await Promise.all([
+        import('three'),
+        import('three/addons/loaders/GLTFLoader.js')
+      ]);
+      
+      // Create a mutable wrapper for THREE
+      const threeWrapper = {};
+      for (const key in THREE) {
+        try { threeWrapper[key] = THREE[key]; } catch(e) {}
+      }
+      threeWrapper.GLTFLoader = GLTFLoader;
+      window.THREE = threeWrapper;
+      return window.THREE;
+    }
+
+    async function showDemoMode() {
+      // 1. Wipe any MindAR DOM that was added during failed init
+      const arCont = document.getElementById('ar-container');
+      arCont.innerHTML = '';
+
+      // 2. Load basic 3D libs for Demo
+      try {
+        await getThreeLibs();
+      } catch (err) {
+        console.error("Demo lib error:", err);
+        alert("Network Error: Could not download 3D menu assets.");
+        return;
+      }
+
+      // 3. Show UI
+      scanOverlay.classList.add('hidden');
+      menuPanel.classList.add('visible');
+      anchorStatus.classList.add('found');
+      statusText.textContent = 'Preview Mode';
+      anchorFound = true;
+
+      // 3. Demo banner
+      if (!document.getElementById('demo-banner')) {
+        const banner = document.createElement('div');
+        banner.id = 'demo-banner';
+        banner.style.cssText = [
+          'position:fixed', 'top:60px', 'left:50%', 'transform:translateX(-50%)',
+          'z-index:55', 'background:rgba(212,168,83,0.12)', 'border:1px solid rgba(212,168,83,0.4)',
+          'border-radius:12px', 'padding:8px 16px', 'font-size:11px', 'letter-spacing:0.5px',
+          'color:#D4A853', 'text-align:center', 'white-space:nowrap', "font-family:'Inter',sans-serif"
+        ].join(';');
+        banner.textContent = '\u26A1 Preview Mode \u2014 point camera at menu card for AR';
+        document.body.appendChild(banner);
+      }
+
+      // 4. Set up Three.js renderer for 3D model preview
+      setupDemoRenderer();
+    }
+
+    // ─── Demo renderer (no camera, just black bg + floating 3D model) ───
+    let demoScene, demoCamera, demoRenderer, demoModel, demoClock;
+    let demoIsDragging = false, demoLastX = 0, demoLastY = 0;
+
+    function setupDemoRenderer() {
+      // Prevent multiple canvas creations if called multiple times
+      if (demoRenderer) return;
+      if (!window.THREE) return;
+
+      demoScene    = new window.THREE.Scene();
+      demoCamera   = new window.THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
+      demoCamera.position.set(0, 0, 1.2);
+
+      demoRenderer = new window.THREE.WebGLRenderer({ antialias: true, alpha: true });
+      demoRenderer.setPixelRatio(window.devicePixelRatio);
+      demoRenderer.setSize(window.innerWidth, window.innerHeight);
+      demoRenderer.setClearColor(0x0A0A0F, 1);
+      demoRenderer.domElement.id = 'demo-canvas';
+      document.getElementById('ar-container').appendChild(demoRenderer.domElement);
+
+      // Lighting
+      demoScene.add(new window.THREE.AmbientLight(0xffffff, 1.6));
+      const dl = new window.THREE.DirectionalLight(0xfff5e0, 2.5);
+      dl.position.set(1, 3, 2);
+      demoScene.add(dl);
+      const fl = new window.THREE.DirectionalLight(0xd4a853, 1.0);
+      fl.position.set(-2, 1, -1);
+      demoScene.add(fl);
+
+      demoClock = new THREE.Clock();
+
+      // Override selectDish for demo mode
+      window._origSelectDish = window.selectDish;
+      window.selectDish = function(dishId) {
+        const dish = MENU.find(d => d.id === dishId);
+        if (!dish) return;
+        document.querySelectorAll('.dish-card').forEach(c => c.classList.remove('active'));
+        const card = document.getElementById('dish-' + dishId);
+        if (card) card.classList.add('active');
+        activeDishId = dishId;
+        if (!dish.model) { loadDemoModel(null); return; }
+        loadDemoModel(dish.model);
+      };
+
+      // Touch/mouse for demo rotation
+      const dc = demoRenderer.domElement;
+      dc.addEventListener('mousedown', e => { demoIsDragging = true; demoLastX = e.clientX; demoLastY = e.clientY; });
+      dc.addEventListener('mousemove', e => {
+        if (!demoIsDragging || !demoModel) return;
+        demoModel.rotation.y += (e.clientX - demoLastX) * 0.012;
+        demoModel.rotation.x += (e.clientY - demoLastY) * 0.008;
+        demoLastX = e.clientX; demoLastY = e.clientY;
+      });
+      dc.addEventListener('mouseup', () => demoIsDragging = false);
+      dc.addEventListener('touchstart', e => { if(e.touches.length===1){ demoIsDragging=true; demoLastX=e.touches[0].clientX; demoLastY=e.touches[0].clientY; }}, {passive:true});
+      dc.addEventListener('touchmove', e => {
+        if(!demoIsDragging||!demoModel||e.touches.length!==1) return;
+        demoModel.rotation.y += (e.touches[0].clientX - demoLastX)*0.012;
+        demoModel.rotation.x += (e.touches[0].clientY - demoLastY)*0.008;
+        demoLastX=e.touches[0].clientX; demoLastY=e.touches[0].clientY;
+      }, {passive:true});
+      dc.addEventListener('touchend', () => demoIsDragging=false);
+
+      // Resize
+      window.addEventListener('resize', () => {
+        demoCamera.aspect = window.innerWidth / window.innerHeight;
+        demoCamera.updateProjectionMatrix();
+        demoRenderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // Render loop
+      function demoLoop() {
+        requestAnimationFrame(demoLoop);
+        if (demoModel) {
+          const t = clock.getElapsedTime(); // Use shared clock logic
+          demoModel.position.y = Math.sin(t * 1.2) * 0.04;
+          if (!demoIsDragging) demoModel.rotation.y += 0.006;
+        }
+        demoRenderer.render(demoScene, demoCamera);
+      }
+      demoLoop();
+    }
+
+    function loadDemoModel(filename) {
+      if (demoModel) { demoScene.remove(demoModel); demoModel = null; }
+      if (!filename) return;
+
+      modelLoading.classList.add('visible');
+      
+      if (!window.THREE || !window.THREE.GLTFLoader) {
+          console.error('Demo Loader not ready');
+          return;
+      }
+
+      const gltfL = new window.THREE.GLTFLoader();
+      gltfL.load(
+        './' + filename,
+        gltf => {
+          modelLoading.classList.remove('visible');
+          demoModel = gltf.scene;
+
+          // Auto-fit
+          const box = new window.THREE.Box3().setFromObject(demoModel);
+          const size = new window.THREE.Vector3();
+          box.getSize(size);
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const sc = 0.7 / maxDim;
+          demoModel.scale.setScalar(sc);
+          const center = new window.THREE.Vector3();
+          box.getCenter(center);
+          demoModel.position.set(-center.x*sc, -center.y*sc, -center.z*sc);
+
+          demoScene.add(demoModel);
+          arHint.classList.add('visible');
+          setTimeout(() => arHint.classList.remove('visible'), 4000);
+        },
+        null,
+        err => {
+          console.error('Demo GLB load error:', err);
+          modelLoading.classList.remove('visible');
+        }
+      );
+    }
+
+    // ─────────────────────────────────────────────
+    // HANDLE START BUTTON — user gesture required for camera on mobile
+    // ─────────────────────────────────────────────
+    let arStarted = false;
+
+    async function handleStartAR() {
+      if (arStarted) return;
+      arStarted = true;
+
+      const btn    = document.getElementById('start-ar-btn');
+      const status = document.getElementById('ar-init-status');
+
+      btn.disabled = true;
+      btn.textContent = 'Starting…';
+      status.textContent = 'Checking environment & camera access…';
+
+      // 1. Check if we are on a Secure Context (HTTPS or localhost)
+      if (!window.isSecureContext) {
+        alert("Camera access is blocked by your browser because this is not a secure connection (HTTPS). Falling back to Demo Mode.\n\nTip: Use a tool like ngrok, or configure your local server to use HTTPS.");
+        showDemoMode();
+        return;
+      }
+
+      // 2. Explicitly request camera permission immediately on user tap
+      try {
+        status.textContent = 'Requesting camera permission…';
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        // Stop the tracks immediately so MindAR can re-request with its own constraints
+        stream.getTracks().forEach(track => track.stop());
+      } catch (err) {
+        console.error('[AR] Permission check failed:', err);
+        alert('Camera permission denied or camera not accessible: ' + err.message + '\n\nFalling back to Demo Mode.');
+        showDemoMode();
+        return;
+      }
+
+      // 3. Load modules dynamically and catch connection failures!
+      status.textContent = 'Connecting to AR libraries…';
+      try {
+        await getThreeLibs();
+        const { MindARThree } = await import('mindar-image-three');
+
+        if (!window.MINDAR) window.MINDAR = {};
+        if (!window.MINDAR.IMAGE) window.MINDAR.IMAGE = {};
+        window.MINDAR.IMAGE.MindARThree = MindARThree;
+      } catch(err) {
+        alert("CRITICAL ERROR: Failed to download AR libraries from internet. (Code: " + err.message + "). Check connection or CDN status.");
+        showDemoMode(); // fallback
+        return;
+      }
+
+      status.textContent = 'Initializing AR engine…';
+      await startAR();
+    }
+
+    // Expose HTML inline handlers globally
+    window.handleStartAR = handleStartAR;
+    window.selectDish = selectDish;
+  </script>
+</body>
+</html>

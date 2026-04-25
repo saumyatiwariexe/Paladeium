@@ -1,0 +1,111 @@
+{
+  "restaurants": [
+    {
+      "id": "demo-restaurant-1",
+      "name": "The Grand Spice",
+      "slug": "the-grand-spice",
+      "description": "Premium dining with AR menus",
+      "status": "active",
+      "createdAt": "2026-04-25T10:00:00Z",
+      "updatedAt": "2026-04-25T10:00:00Z"
+    }
+  ],
+  "categories": [
+    { "id": "cat-starters", "restaurantId": "demo-restaurant-1", "name": "Starters", "emoji": "🥗", "sortOrder": 1 },
+    { "id": "cat-mains",    "restaurantId": "demo-restaurant-1", "name": "Mains",    "emoji": "🍽", "sortOrder": 2 },
+    { "id": "cat-drinks",   "restaurantId": "demo-restaurant-1", "name": "Drinks",   "emoji": "🍹", "sortOrder": 3 },
+    { "id": "cat-desserts", "restaurantId": "demo-restaurant-1", "name": "Desserts", "emoji": "🍰", "sortOrder": 4 }
+  ],
+  "items": [
+    {
+      "id": "item-1",
+      "restaurantId": "demo-restaurant-1",
+      "categoryId": "cat-mains",
+      "name": "Wagyu Smash Burger",
+      "description": "Double patty, aged cheddar, truffle aioli",
+      "price": 649,
+      "emoji": "🍔",
+      "imageUrl": "",
+      "modelUrl": "burger.glb",
+      "hasAr": true,
+      "dietaryTags": ["non-veg"],
+      "available": true,
+      "createdAt": "2026-04-25T10:00:00Z"
+    },
+    {
+      "id": "item-2",
+      "restaurantId": "demo-restaurant-1",
+      "categoryId": "cat-mains",
+      "name": "Margherita Classico",
+      "description": "San Marzano tomato, buffalo mozzarella",
+      "price": 549,
+      "emoji": "🍕",
+      "imageUrl": "",
+      "modelUrl": "",
+      "hasAr": false,
+      "dietaryTags": ["veg"],
+      "available": true,
+      "createdAt": "2026-04-25T10:00:00Z"
+    },
+    {
+      "id": "item-3",
+      "restaurantId": "demo-restaurant-1",
+      "categoryId": "cat-mains",
+      "name": "Cacio e Pepe",
+      "description": "Tonnarelli, romano, tellicherry pepper",
+      "price": 479,
+      "emoji": "🍝",
+      "imageUrl": "",
+      "modelUrl": "",
+      "hasAr": false,
+      "dietaryTags": ["veg"],
+      "available": true,
+      "createdAt": "2026-04-25T10:00:00Z"
+    },
+    {
+      "id": "item-4",
+      "restaurantId": "demo-restaurant-1",
+      "categoryId": "cat-starters",
+      "name": "Caesar Deluxe",
+      "description": "Romaine, house dressing, parmesan crisp",
+      "price": 329,
+      "emoji": "🥗",
+      "imageUrl": "",
+      "modelUrl": "",
+      "hasAr": false,
+      "dietaryTags": ["non-veg"],
+      "available": true,
+      "createdAt": "2026-04-25T10:00:00Z"
+    },
+    {
+      "id": "item-5",
+      "restaurantId": "demo-restaurant-1",
+      "categoryId": "cat-drinks",
+      "name": "Virgin Mojito",
+      "description": "Fresh lime, mint, soda, brown sugar",
+      "price": 199,
+      "emoji": "🍹",
+      "imageUrl": "",
+      "modelUrl": "",
+      "hasAr": false,
+      "dietaryTags": ["veg", "vegan"],
+      "available": true,
+      "createdAt": "2026-04-25T10:00:00Z"
+    },
+    {
+      "id": "item-6",
+      "restaurantId": "demo-restaurant-1",
+      "categoryId": "cat-desserts",
+      "name": "Chocolate Lava Cake",
+      "description": "Warm Valrhona centre, vanilla bean ice cream",
+      "price": 299,
+      "emoji": "🍫",
+      "imageUrl": "",
+      "modelUrl": "",
+      "hasAr": false,
+      "dietaryTags": ["veg"],
+      "available": true,
+      "createdAt": "2026-04-25T10:00:00Z"
+    }
+  ]
+}
