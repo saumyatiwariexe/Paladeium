@@ -5,9 +5,9 @@ import type { Database } from './types'
 const DB_PATH = path.join(process.cwd(), 'data', 'db.json')
 const EMPTY: Database = { restaurants: [], categories: [], items: [] }
 
-// Vercel KV is used when these env vars are present (injected by Vercel automatically)
-function hasKV() {
-  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)
+// Upstash Redis is used in production when these env vars are set
+function hasRedis() {
+  return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
 }
 
 function readFileDb(): Database {
@@ -26,13 +26,17 @@ function writeFileDb(db: Database): void {
 }
 
 export async function readDb(): Promise<Database> {
-  if (hasKV()) {
-    const { kv } = await import('@vercel/kv')
-    const stored = await kv.get<Database>('paladeium_db')
+  if (hasRedis()) {
+    const { Redis } = await import('@upstash/redis')
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    })
+    const stored = await redis.get<Database>('paladeium_db')
     if (!stored) {
-      // First run: seed KV from the bundled db.json
+      // First run: seed Redis from the bundled db.json
       const seed = readFileDb()
-      await kv.set('paladeium_db', seed)
+      await redis.set('paladeium_db', seed)
       return seed
     }
     return stored
@@ -41,9 +45,13 @@ export async function readDb(): Promise<Database> {
 }
 
 export async function writeDb(db: Database): Promise<void> {
-  if (hasKV()) {
-    const { kv } = await import('@vercel/kv')
-    await kv.set('paladeium_db', db)
+  if (hasRedis()) {
+    const { Redis } = await import('@upstash/redis')
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    })
+    await redis.set('paladeium_db', db)
     return
   }
   writeFileDb(db)
