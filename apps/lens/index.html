@@ -434,7 +434,7 @@
   <!-- Pinch-to-rotate hint -->
   <div id="ar-hint">
     <span class="hint-icon">✌️</span>
-    <span>Pinch &amp; drag to rotate</span>
+    <span>Drag to tilt · pinch to scale</span>
   </div>
 
   <!-- Floating bottom menu panel -->
@@ -695,8 +695,10 @@
 
     function clearArModel() {
       if (arModel) {
-        // Remove from all potential anchor parents
-        anchors.forEach(a => a.group.remove(arModel));
+        anchors.forEach(a => {
+          a.group.remove(arModel);
+          if (a.innerGroup) a.innerGroup.remove(arModel);
+        });
         arModel = null;
       }
     }
@@ -731,10 +733,13 @@
 
           const center = new window.THREE.Vector3();
           box.getCenter(center);
-          arModel.position.set(-center.x * scale, -center.y * scale + 0.02, -center.z * scale);
+          // Sit flush on card surface — base of model at y=0, no gap
+          const baseY = -box.min.y * scale;
+          arModel.userData.baseY = baseY;
+          arModel.position.set(-center.x * scale, baseY, -center.z * scale);
 
           // If an anchor is already found, attach it immediately
-          if (activeAnchor) activeAnchor.group.add(arModel);
+          if (activeAnchor) activeAnchor.innerGroup.add(arModel);
 
           // Show rotation hint
           arHint.classList.add('visible');
@@ -776,8 +781,8 @@
 
     arContainer.addEventListener('touchmove', e => {
       if (isDragging && arModel && e.touches.length === 1) {
-        arModel.rotation.y += (e.touches[0].clientX - lastTouchX) * 0.012;
-        arModel.rotation.x += (e.touches[0].clientY - lastTouchY) * 0.008;
+        // X-axis only — drag up/down to tilt the model, no Y spin
+        arModel.rotation.x += (e.touches[0].clientY - lastTouchY) * 0.01;
         lastTouchX = e.touches[0].clientX;
         lastTouchY = e.touches[0].clientY;
       }
@@ -840,7 +845,12 @@
         // Instantiate 5 anchors for multi-perspective tracking
         for (let i = 0; i < 5; i++) {
           const a = mindarThree.addAnchor(i);
-          
+
+          // innerGroup sits inside the anchor group and receives counter Y/Z rotation
+          // so the model only follows the card's X tilt (no Y spin, no Z roll)
+          a.innerGroup = new window.THREE.Group();
+          a.group.add(a.innerGroup);
+
           a.onTargetFound = () => {
             activeAnchor = a;
             anchorFound = true;
@@ -849,19 +859,18 @@
             menuPanel.classList.remove('minimized');
             anchorStatus.classList.add('found');
             statusText.textContent = 'Anchor locked';
-            
+
             if (activeDishId) {
               const dish = MENU.find(d => d.id === activeDishId);
               if (dish?.model && !arModel) {
                 loadArModel(dish.model);
               } else if (arModel) {
-                a.group.add(arModel); // Switch model to this anchor
+                a.innerGroup.add(arModel);
               }
             }
           };
 
           a.onTargetLost = () => {
-             // Only mark lost if this was the active anchor
              if (activeAnchor === a) {
                activeAnchor = null;
                anchorFound = false;
@@ -869,17 +878,25 @@
                statusText.textContent = 'Scanning…';
              }
           };
-          
+
           anchors.push(a);
         }
 
         // AR animation loop
         renderer.setAnimationLoop(() => {
-          if (arModel) {
+          // Counter-rotate innerGroup to cancel anchor's Y and Z rotation.
+          // Result: model only tilts with X-axis (card tilt), never spins.
+          anchors.forEach(a => {
+            if (a.group.visible) {
+              a.innerGroup.rotation.y = -a.group.rotation.y;
+              a.innerGroup.rotation.z = -a.group.rotation.z;
+            }
+          });
+
+          if (arModel && arModel.userData.baseY !== undefined) {
             const t = clock.getElapsedTime();
-            // Reduced hover height to prevent parallax sliding
-            arModel.position.y = 0.02 + Math.sin(t * 1.2) * 0.004;
-            if (!isDragging) arModel.rotation.y += 0.005;
+            // Subtle float — 6mm max, no auto-spin
+            arModel.position.y = arModel.userData.baseY + Math.sin(t * 1.2) * 0.006;
           }
           mindarThree.renderer.render(scene, camera);
         });

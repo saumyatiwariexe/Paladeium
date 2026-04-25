@@ -6,6 +6,7 @@ export interface Restaurant {
   slug: string
   description: string
   status: RestaurantStatus
+  targetsUrl: string | null
   createdAt: string
   updatedAt: string
 }

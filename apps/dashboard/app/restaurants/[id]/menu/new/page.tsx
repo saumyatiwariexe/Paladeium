@@ -12,6 +12,12 @@ interface ItemData {
   modelUrl: string; hasAr: boolean; dietaryTags: string[]; available: boolean
 }
 
+async function safeJson(res: Response) {
+  const text = await res.text().catch(() => '')
+  if (!text.trim()) return {}
+  try { return JSON.parse(text) } catch { return {} }
+}
+
 export default function NewMenuItemPage() {
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
@@ -30,24 +36,26 @@ export default function NewMenuItemPage() {
 
   useEffect(() => {
     fetch(`/api/restaurants/${id}`)
-      .then(r => r.json())
-      .then(data => {
-        setCategories(data.categories ?? [])
-        setRestaurantSlug(data.restaurant?.slug ?? '')
-        if (data.categories?.length) {
-          setForm(f => ({ ...f, categoryId: data.categories[0].id }))
+      .then(r => safeJson(r))
+      .then((data: unknown) => {
+        const d = data as { categories?: Category[]; restaurant?: { slug: string } }
+        setCategories(d.categories ?? [])
+        setRestaurantSlug(d.restaurant?.slug ?? '')
+        if (d.categories?.length) {
+          setForm(f => ({ ...f, categoryId: d.categories![0].id }))
         }
       })
     if (editId) {
       fetch(`/api/restaurants/${id}/menu/${editId}`)
-        .then(r => r.json())
-        .then(item => {
-          if (item) {
+        .then(r => safeJson(r))
+        .then((item: unknown) => {
+          const i = item as { name?: string; description?: string; price?: number; emoji?: string; categoryId?: string; modelUrl?: string; hasAr?: boolean; dietaryTags?: string[]; available?: boolean }
+          if (i?.name) {
             setForm(f => ({
               ...f,
-              name: item.name, description: item.description, price: String(item.price),
-              emoji: item.emoji, categoryId: item.categoryId, modelUrl: item.modelUrl ?? '',
-              hasAr: item.hasAr, dietaryTags: item.dietaryTags, available: item.available,
+              name: i.name!, description: i.description ?? '', price: String(i.price ?? ''),
+              emoji: i.emoji ?? '', categoryId: i.categoryId ?? '', modelUrl: i.modelUrl ?? '',
+              hasAr: i.hasAr ?? false, dietaryTags: i.dietaryTags ?? [], available: i.available ?? true,
             }))
           }
         })
@@ -93,7 +101,7 @@ export default function NewMenuItemPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const data = await res.json()
+      const data = await safeJson(res) as { error?: string }
       if (!res.ok) throw new Error(data.error ?? 'Failed to save item')
       router.push(`/restaurants/${id}/menu`)
     } catch (err: unknown) {
@@ -103,10 +111,11 @@ export default function NewMenuItemPage() {
     }
   }
 
+  const inputCls = 'w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 focus:outline-none focus:border-[#D4A853]/50 transition-all'
+
   return (
-    <div className="p-8 max-w-xl">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm mb-8">
+    <div className="p-4 sm:p-8 max-w-xl">
+      <div className="flex items-center gap-2 text-sm mb-8 flex-wrap">
         <Link href="/restaurants" className="text-white/30 hover:text-white/60 transition-colors">Restaurants</Link>
         <span className="text-white/20">/</span>
         <Link href={`/restaurants/${id}/menu`} className="text-white/30 hover:text-white/60 transition-colors">Menu</Link>
@@ -116,7 +125,7 @@ export default function NewMenuItemPage() {
 
       <h1 className="text-2xl font-semibold text-white mb-1">{editId ? 'Edit Menu Item' : 'Add Menu Item'}</h1>
       <p className="text-white/40 text-sm mb-8">
-        {editId ? 'Update this dish.' : 'Add a new dish to the menu. Enable AR to show a 3D model.'}
+        {editId ? 'Update this dish.' : 'Add a new dish. Enable AR to show a 3D model.'}
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -126,7 +135,7 @@ export default function NewMenuItemPage() {
           <select
             value={form.categoryId}
             onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
-            className="w-full px-4 py-3 text-sm rounded-lg"
+            className={inputCls}
           >
             {categories.map(c => (
               <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>
@@ -135,7 +144,6 @@ export default function NewMenuItemPage() {
           </select>
         </div>
 
-        {/* New category fields */}
         {form.categoryId === '__new__' && (
           <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl p-4 space-y-3">
             <p className="text-white/50 text-xs font-medium uppercase tracking-wider">New Category</p>
@@ -145,20 +153,20 @@ export default function NewMenuItemPage() {
                 value={form.newCategoryEmoji}
                 onChange={e => setForm(f => ({ ...f, newCategoryEmoji: e.target.value }))}
                 placeholder="🍽"
-                className="w-14 px-3 py-2.5 text-center text-lg rounded-lg"
+                className="w-14 px-3 py-2.5 text-center text-lg rounded-lg bg-white/[0.04] border border-white/10 text-white"
               />
               <input
                 type="text"
                 value={form.newCategoryName}
                 onChange={e => setForm(f => ({ ...f, newCategoryName: e.target.value }))}
                 placeholder="e.g. Grills"
-                className="flex-1 px-4 py-2.5 text-sm rounded-lg"
+                className="flex-1 px-4 py-2.5 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20"
               />
             </div>
           </div>
         )}
 
-        {/* Emoji + Name row */}
+        {/* Emoji + Name */}
         <div className="flex gap-3">
           <div>
             <label className="block text-sm text-white/60 font-medium mb-1.5">Emoji</label>
@@ -167,7 +175,7 @@ export default function NewMenuItemPage() {
               value={form.emoji}
               onChange={e => setForm(f => ({ ...f, emoji: e.target.value }))}
               placeholder="🍔"
-              className="w-16 px-3 py-3 text-center text-xl rounded-lg"
+              className="w-16 px-3 py-3 text-center text-xl rounded-lg bg-white/[0.04] border border-white/10 text-white"
             />
           </div>
           <div className="flex-1">
@@ -177,7 +185,7 @@ export default function NewMenuItemPage() {
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               placeholder="e.g. Wagyu Smash Burger"
-              className="w-full px-4 py-3 text-sm rounded-lg"
+              className={inputCls}
               autoFocus={!editId}
             />
           </div>
@@ -189,9 +197,9 @@ export default function NewMenuItemPage() {
           <textarea
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-            placeholder="Short description of the dish…"
+            placeholder="Short description…"
             rows={2}
-            className="w-full px-4 py-3 text-sm rounded-lg resize-none"
+            className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 focus:outline-none focus:border-[#D4A853]/50 resize-none transition-all"
           />
         </div>
 
@@ -206,12 +214,12 @@ export default function NewMenuItemPage() {
               onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
               placeholder="649"
               min={0}
-              className="w-32 px-4 py-3 text-sm rounded-lg"
+              className="w-36 px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 focus:outline-none focus:border-[#D4A853]/50 transition-all"
             />
           </div>
         </div>
 
-        {/* Dietary tags */}
+        {/* Dietary */}
         <div>
           <label className="block text-sm text-white/60 font-medium mb-2">Dietary Tags</label>
           <div className="flex flex-wrap gap-2">
@@ -237,33 +245,27 @@ export default function NewMenuItemPage() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-white/80 text-sm font-medium">Enable AR (3D Model)</p>
-              <p className="text-white/35 text-xs mt-0.5">Customer can view a 3D model of this dish in AR</p>
+              <p className="text-white/35 text-xs mt-0.5">Customer views a 3D model in AR</p>
             </div>
             <button
               type="button"
               onClick={() => setForm(f => ({ ...f, hasAr: !f.hasAr }))}
-              className={`w-11 h-6 rounded-full transition-all relative ${
-                form.hasAr ? 'bg-[#D4A853]' : 'bg-white/10'
-              }`}
+              className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${form.hasAr ? 'bg-[#D4A853]' : 'bg-white/10'}`}
             >
-              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${
-                form.hasAr ? 'left-5' : 'left-0.5'
-              }`} />
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.hasAr ? 'left-5' : 'left-0.5'}`} />
             </button>
           </div>
           {form.hasAr && (
             <div>
-              <label className="block text-xs text-white/40 font-medium mb-1.5">3D Model File (GLB)</label>
+              <label className="block text-xs text-white/40 font-medium mb-1.5">3D Model (GLB filename or URL)</label>
               <input
                 type="text"
                 value={form.modelUrl}
                 onChange={e => setForm(f => ({ ...f, modelUrl: e.target.value }))}
-                placeholder="e.g. burger.glb or https://cdn.../model.glb"
-                className="w-full px-4 py-2.5 text-xs rounded-lg font-mono"
+                placeholder="burger.glb or https://cdn.example.com/model.glb"
+                className="w-full px-4 py-2.5 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 font-mono"
               />
-              <p className="text-white/25 text-[10px] mt-1">
-                Local filename (place in lens folder) or full CDN URL. Keep under 5 MB.
-              </p>
+              <p className="text-white/25 text-[10px] mt-1">Local file (place in lens folder) or full URL. Under 5 MB.</p>
             </div>
           )}
         </div>
@@ -272,29 +274,23 @@ export default function NewMenuItemPage() {
         <div className="flex items-center justify-between py-2">
           <div>
             <p className="text-white/60 text-sm font-medium">Available</p>
-            <p className="text-white/30 text-xs">Hide from menu if temporarily unavailable</p>
+            <p className="text-white/30 text-xs">Hide if temporarily unavailable</p>
           </div>
           <button
             type="button"
             onClick={() => setForm(f => ({ ...f, available: !f.available }))}
-            className={`w-11 h-6 rounded-full transition-all relative ${
-              form.available ? 'bg-emerald-500' : 'bg-white/10'
-            }`}
+            className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${form.available ? 'bg-emerald-500' : 'bg-white/10'}`}
           >
-            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${
-              form.available ? 'left-5' : 'left-0.5'
-            }`} />
+            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.available ? 'left-5' : 'left-0.5'}`} />
           </button>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-red-400 text-sm">
             {error}
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex gap-3 pt-2">
           <Link
             href={`/restaurants/${id}/menu`}

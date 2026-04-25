@@ -12,6 +12,12 @@ function slugify(text: string) {
     .replace(/-+/g, '-')
 }
 
+async function safeJson(res: Response) {
+  const text = await res.text().catch(() => '')
+  if (!text.trim()) return {}
+  try { return JSON.parse(text) } catch { return {} }
+}
+
 export default function NewRestaurantPage() {
   const router = useRouter()
   const [form, setForm] = useState({ name: '', slug: '', description: '', status: 'active' })
@@ -36,9 +42,9 @@ export default function NewRestaurantPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed to create restaurant')
-      router.push(`/restaurants/${data.id}/menu`)
+      const data = await safeJson(res)
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Failed to create restaurant')
+      router.push(`/restaurants/${(data as { id: string }).id}/menu`)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -47,9 +53,8 @@ export default function NewRestaurantPage() {
   }
 
   return (
-    <div className="p-8 max-w-xl">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-8">
+    <div className="p-4 sm:p-8 max-w-xl">
+      <div className="flex items-center gap-3 mb-8 flex-wrap">
         <Link href="/restaurants" className="text-white/30 hover:text-white/60 transition-colors text-sm">
           ← Restaurants
         </Link>
@@ -61,7 +66,6 @@ export default function NewRestaurantPage() {
       <p className="text-white/40 text-sm mb-8">Create a new restaurant profile. You&apos;ll add menu items next.</p>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Name */}
         <div>
           <label className="block text-sm text-white/60 font-medium mb-1.5">Restaurant Name *</label>
           <input
@@ -69,61 +73,56 @@ export default function NewRestaurantPage() {
             value={form.name}
             onChange={e => handleName(e.target.value)}
             placeholder="e.g. The Grand Spice"
-            className="w-full px-4 py-3 text-sm rounded-lg"
+            className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 focus:outline-none focus:border-[#D4A853]/50 transition-all"
             autoFocus
           />
         </div>
 
-        {/* Slug */}
         <div>
           <label className="block text-sm text-white/60 font-medium mb-1.5">URL Slug *</label>
           <div className="flex items-center gap-2">
-            <span className="text-white/25 text-sm font-mono shrink-0">paladeium.app/r/</span>
+            <span className="text-white/25 text-sm font-mono shrink-0">…/r/</span>
             <input
               type="text"
               value={form.slug}
               onChange={e => setForm(f => ({ ...f, slug: slugify(e.target.value) }))}
               placeholder="the-grand-spice"
-              className="flex-1 px-4 py-3 text-sm rounded-lg font-mono"
+              className="flex-1 px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 focus:outline-none focus:border-[#D4A853]/50 font-mono transition-all"
             />
           </div>
-          <p className="text-white/25 text-xs mt-1.5">Auto-generated from name. Lowercase letters, numbers, hyphens only.</p>
+          <p className="text-white/25 text-xs mt-1.5">Auto-generated. Lowercase letters, numbers, hyphens only.</p>
         </div>
 
-        {/* Description */}
         <div>
           <label className="block text-sm text-white/60 font-medium mb-1.5">Description</label>
           <textarea
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-            placeholder="One line about the restaurant..."
+            placeholder="One line about the restaurant…"
             rows={2}
-            className="w-full px-4 py-3 text-sm rounded-lg resize-none"
+            className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 focus:outline-none focus:border-[#D4A853]/50 resize-none transition-all"
           />
         </div>
 
-        {/* Status */}
         <div>
           <label className="block text-sm text-white/60 font-medium mb-1.5">Status</label>
           <select
             value={form.status}
             onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-            className="w-full px-4 py-3 text-sm rounded-lg"
+            className="w-full px-4 py-3 text-sm rounded-lg bg-white/[0.04] border border-white/10 text-white focus:outline-none focus:border-[#D4A853]/50 transition-all"
           >
             <option value="active">Active — AR link is live</option>
             <option value="pending">Pending — setting up</option>
-            <option value="inactive">Inactive — hidden from customers</option>
+            <option value="inactive">Inactive — hidden</option>
           </select>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-red-400 text-sm">
             {error}
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex gap-3 pt-2">
           <Link
             href="/restaurants"

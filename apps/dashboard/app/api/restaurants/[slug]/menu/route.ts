@@ -14,7 +14,7 @@ const MenuItemSchema = z.object({
   categoryId: z.string().optional(),
   newCategoryName: z.string().max(50).optional(),
   newCategoryEmoji: z.string().max(10).optional(),
-  modelUrl: z.string().max(200).optional().default(''),
+  modelUrl: z.string().max(500).optional().default(''),
   hasAr: z.boolean().optional().default(false),
   dietaryTags: z.array(z.string().max(50)).max(10).optional().default([]),
   available: z.boolean().optional().default(true),
@@ -23,98 +23,106 @@ const MenuItemSchema = z.object({
 
 // GET /api/restaurants/[slug]/menu — public, consumed by AR Lens
 export async function GET(_req: NextRequest, { params }: Params) {
-  const db = await readDb()
-  const restaurant =
-    db.restaurants.find(r => r.slug === params.slug) ??
-    db.restaurants.find(r => r.id === params.slug)
+  try {
+    const db = await readDb()
+    const restaurant =
+      db.restaurants.find(r => r.slug === params.slug) ??
+      db.restaurants.find(r => r.id === params.slug)
 
-  if (!restaurant) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!restaurant) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const categories = db.categories
-    .filter(c => c.restaurantId === restaurant.id)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
+    const categories = db.categories
+      .filter(c => c.restaurantId === restaurant.id)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
 
-  const items = db.items.filter(i => i.restaurantId === restaurant.id && i.available)
+    const items = db.items.filter(i => i.restaurantId === restaurant.id && i.available)
 
-  const menu = items.map(item => {
-    const cat = categories.find(c => c.id === item.categoryId)
-    return {
-      id: item.id,
-      name: item.name,
-      desc: item.description,
-      price: `₹${item.price}`,
-      emoji: item.emoji || '🍽',
-      cat: cat?.name.toLowerCase() ?? 'other',
-      model: item.modelUrl || null,
-      hasAR: item.hasAr,
+    const menu = items.map(item => {
+      const cat = categories.find(c => c.id === item.categoryId)
+      return {
+        id: item.id,
+        name: item.name,
+        desc: item.description,
+        price: `₹${item.price}`,
+        emoji: item.emoji || '🍽',
+        cat: cat?.name.toLowerCase() ?? 'other',
+        model: item.modelUrl || null,
+        hasAR: item.hasAr,
+      }
+    })
+
+    const response: LensMenuResponse = {
+      restaurant: {
+        id: restaurant.id,
+        name: restaurant.name,
+        slug: restaurant.slug,
+        targetsUrl: restaurant.targetsUrl ?? null,
+        currency: 'INR',
+      },
+      menu,
+      categories: categories.map(c => ({ id: c.id, name: c.name, emoji: c.emoji })),
     }
-  })
 
-  const response: LensMenuResponse = {
-    restaurant: {
-      id: restaurant.id,
-      name: restaurant.name,
-      slug: restaurant.slug,
-      targetsUrl: null,
-      currency: 'INR',
-    },
-    menu,
-    categories: categories.map(c => ({ id: c.id, name: c.name, emoji: c.emoji })),
+    return NextResponse.json(response)
+  } catch {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-
-  return NextResponse.json(response)
 }
 
-// POST /api/restaurants/[slug]/menu — add menu item (requires auth via middleware)
+// POST /api/restaurants/[slug]/menu — add menu item (auth via middleware)
 export async function POST(req: NextRequest, { params }: Params) {
-  const body = await req.json().catch(() => null)
-  const parsed = MenuItemSchema.safeParse(body)
+  try {
+    const body = await req.json().catch(() => null)
+    const parsed = MenuItemSchema.safeParse(body)
 
-  if (!parsed.success) {
-    const message = parsed.error.errors[0]?.message ?? 'Invalid request'
-    return NextResponse.json({ error: message }, { status: 422 })
-  }
+    if (!parsed.success) {
+      const message = parsed.error.errors[0]?.message ?? 'Invalid request'
+      return NextResponse.json({ error: message }, { status: 422 })
+    }
 
-  const data = parsed.data
-  const db = await readDb()
+    const data = parsed.data
+    const db = await readDb()
 
-  const restaurant =
-    db.restaurants.find(r => r.slug === params.slug) ??
-    db.restaurants.find(r => r.id === params.slug)
-  if (!restaurant) return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 })
+    const restaurant =
+      db.restaurants.find(r => r.slug === params.slug) ??
+      db.restaurants.find(r => r.id === params.slug)
+    if (!restaurant) return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 })
 
-  let categoryId = data.categoryId ?? ''
-  if (categoryId === '__new__' || (!categoryId && data.newCategoryName)) {
-    const existingCats = db.categories.filter(c => c.restaurantId === restaurant.id)
-    const newCat = {
+    let categoryId = data.categoryId ?? ''
+    if (categoryId === '__new__' || (!categoryId && data.newCategoryName)) {
+      const existingCats = db.categories.filter(c => c.restaurantId === restaurant.id)
+      const newCat = {
+        id: uuid(),
+        restaurantId: restaurant.id,
+        name: data.newCategoryName ?? 'Other',
+        emoji: data.newCategoryEmoji ?? '🍽',
+        sortOrder: existingCats.length + 1,
+      }
+      db.categories.push(newCat)
+      categoryId = newCat.id
+    }
+
+    const item = {
       id: uuid(),
       restaurantId: restaurant.id,
-      name: data.newCategoryName ?? 'Other',
-      emoji: data.newCategoryEmoji ?? '🍽',
-      sortOrder: existingCats.length + 1,
+      categoryId,
+      name: data.name,
+      description: data.description,
+      price: data.price,
+      emoji: data.emoji,
+      imageUrl: data.imageUrl,
+      modelUrl: data.modelUrl,
+      hasAr: data.hasAr,
+      dietaryTags: data.dietaryTags,
+      available: data.available,
+      createdAt: new Date().toISOString(),
     }
-    db.categories.push(newCat)
-    categoryId = newCat.id
+
+    db.items.push(item)
+    await writeDb(db)
+
+    return NextResponse.json(item, { status: 201 })
+  } catch {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-
-  const item = {
-    id: uuid(),
-    restaurantId: restaurant.id,
-    categoryId,
-    name: data.name,
-    description: data.description,
-    price: data.price,
-    emoji: data.emoji,
-    imageUrl: data.imageUrl,
-    modelUrl: data.modelUrl,
-    hasAr: data.hasAr,
-    dietaryTags: data.dietaryTags,
-    available: data.available,
-    createdAt: new Date().toISOString(),
-  }
-
-  db.items.push(item)
-  await writeDb(db)
-
-  return NextResponse.json(item, { status: 201 })
 }

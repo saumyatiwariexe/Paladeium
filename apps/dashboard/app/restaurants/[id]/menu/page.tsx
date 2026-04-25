@@ -59,7 +59,13 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href={`/restaurants/${params.id}/marker`}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-white/5 text-white/50 hover:text-white/80 hover:bg-white/[0.08] transition-colors border border-white/10"
+          >
+            🎯 AR Marker
+          </Link>
           <a
             href={`${LENS_URL}?r=${restaurant.slug}`}
             target="_blank"
