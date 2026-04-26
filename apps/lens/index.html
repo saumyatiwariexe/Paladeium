@@ -843,6 +843,12 @@
         const fl = new window.THREE.DirectionalLight(0xd4a853, 0.8);
         fl.position.set(-2, 1, -1); scene.add(fl);
 
+        // Corrective quaternion: rotate -90° around X so the model stands upright.
+        // MindAR's image-target space has Y pointing INTO the card plane (i.e. the
+        // model's up-axis maps to the camera direction), so we must pre-rotate it.
+        const uprightQ = new window.THREE.Quaternion();
+        uprightQ.setFromEuler(new window.THREE.Euler(-Math.PI / 2, 0, 0));
+
         // Instantiate 5 anchors for multi-perspective tracking
         for (let i = 0; i < 5; i++) {
           const a = mindarThree.addAnchor(i);
@@ -850,6 +856,7 @@
           // innerGroup sits inside the anchor group and receives counter Y/Z rotation
           // so the model only follows the card's X tilt (no Y spin, no Z roll)
           a.innerGroup = new window.THREE.Group();
+          a.innerGroup.userData.uprightQ = uprightQ;
           a.group.add(a.innerGroup);
 
           a.onTargetFound = () => {
@@ -886,12 +893,17 @@
 
         // AR animation loop
         renderer.setAnimationLoop(() => {
-          // Fully invert the anchor's quaternion onto innerGroup so the model is
-          // world-aligned (upright) regardless of card tilt/roll.
-          // arModel.rotation.y from drag then spins around the true world Y-axis.
+          // Invert the anchor's world rotation so the innerGroup is world-aligned,
+          // then multiply by the upright correction so the model stands vertically.
           anchors.forEach(a => {
             if (a.group.visible) {
-              a.innerGroup.quaternion.copy(a.group.quaternion).invert();
+              // Get anchor's world quaternion
+              const worldQ = new window.THREE.Quaternion();
+              a.group.getWorldQuaternion(worldQ);
+              // Counter-rotate to cancel the anchor's world orientation
+              a.innerGroup.quaternion.copy(worldQ).invert();
+              // Apply the -90° X correction so the model stands upright
+              a.innerGroup.quaternion.multiply(uprightQ);
             }
           });
 
