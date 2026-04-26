@@ -681,6 +681,7 @@
 
       // Always track which dish is selected so onTargetFound can reload it
       activeDishId = dishId;
+      console.log('[AR] selectDish:', dish.name, '| model:', dish.model, '| anchorFound:', anchorFound);
 
       // Update active state
       document.querySelectorAll('.dish-card').forEach(c => c.classList.remove('active'));
@@ -731,13 +732,17 @@
 
       const gltfLoader = new window.THREE.GLTFLoader();
 
+      // Resolve URL: full URLs are used as-is, filenames are relative to lens folder
+      const modelUrl = /^https?:\/\//.test(filename) ? filename : './' + filename;
+      console.log('[AR] Loading model from:', modelUrl);
+
       gltfLoader.load(
-        './' + encodeURIComponent(filename),
+        modelUrl,
         (gltf) => {
           modelLoading.classList.remove('visible');
           arModel = gltf.scene;
 
-          // Center + sit flush on anchor (Lower Y offset = better angle stability)
+          // Center + sit flush on anchor
           const box = new window.THREE.Box3().setFromObject(arModel);
           const size = new window.THREE.Vector3();
           box.getSize(size);
@@ -748,24 +753,23 @@
 
           const center = new window.THREE.Vector3();
           box.getCenter(center);
-          // Sit flush on card surface — base of model at y=0, no gap
           const baseY = -box.min.y * scale;
           arModel.userData.baseY = baseY;
           arModel.position.set(-center.x * scale, baseY, -center.z * scale);
 
           // Attach to the EMA virtual anchor's corrective sub-group
           if (correctGroup) correctGroup.add(arModel);
+          console.log('[AR] Model loaded ✓ scale=', scale.toFixed(4), 'baseY=', baseY.toFixed(4));
 
           // Show rotation hint
           arHint.classList.add('visible');
           setTimeout(() => arHint.classList.remove('visible'), 4000);
         },
-        (progress) => {
-          // optional progress
-        },
+        undefined,
         (error) => {
-          console.error('GLB load error:', error);
+          console.error('[AR] GLB load error:', error);
           modelLoading.classList.remove('visible');
+          statusText.textContent = 'Model failed to load';
         }
       );
     }
