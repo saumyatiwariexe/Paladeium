@@ -909,12 +909,14 @@
         if (anchors.length === 0) throw new Error('No valid targets in mind file');
 
         // ─── Animation loop ─────────────────────────────────────────
+        const _camPos = new window.THREE.Vector3(0, 0, 0); // camera is always at world origin in MindAR
+
         renderer.setAnimationLoop(() => {
-          // Per-frame world-alignment: invert each anchor's world rotation
-          // so the model stays upright regardless of how the marker is angled.
+          // Per-frame: make each visible anchor's innerGroup face the camera.
+          // lookAt with default Y-up keeps the model upright (bun on top) from any angle.
           anchors.forEach(a => {
             if (a.group.visible && a.innerGroup) {
-              a.innerGroup.quaternion.copy(a.group.quaternion).invert();
+              a.innerGroup.lookAt(_camPos);
             }
           });
 
