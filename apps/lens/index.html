@@ -843,20 +843,17 @@
         const fl = new window.THREE.DirectionalLight(0xd4a853, 0.8);
         fl.position.set(-2, 1, -1); scene.add(fl);
 
-        // Corrective quaternion: rotate -90° around X so the model stands upright.
-        // MindAR's image-target space has Y pointing INTO the card plane (i.e. the
-        // model's up-axis maps to the camera direction), so we must pre-rotate it.
-        const uprightQ = new window.THREE.Quaternion();
-        uprightQ.setFromEuler(new window.THREE.Euler(Math.PI / 2, 0, 0));
-
         // Instantiate 5 anchors for multi-perspective tracking
         for (let i = 0; i < 5; i++) {
           const a = mindarThree.addAnchor(i);
 
-          // innerGroup sits inside the anchor group and receives counter Y/Z rotation
-          // so the model only follows the card's X tilt (no Y spin, no Z roll)
+          // innerGroup holds the corrective rotation so the model stands upright
+          // on the card surface. MindAR drives the parent group's pose naturally,
+          // so the model will tilt/rotate with the camera like a real object.
           a.innerGroup = new window.THREE.Group();
-          a.innerGroup.userData.uprightQ = uprightQ;
+          // MindAR's target plane has Z pointing out; rotate +90° around X so
+          // the model's Y-up aligns with the card's outward normal.
+          a.innerGroup.rotation.x = Math.PI / 2;
           a.group.add(a.innerGroup);
 
           a.onTargetFound = () => {
@@ -891,22 +888,10 @@
           anchors.push(a);
         }
 
-        // AR animation loop
+        // AR animation loop — no quaternion overrides; MindAR drives
+        // the anchor group's pose naturally so the model tracks the card
+        // from any camera angle/orientation like a real physical object.
         renderer.setAnimationLoop(() => {
-          // Invert the anchor's world rotation so the innerGroup is world-aligned,
-          // then multiply by the upright correction so the model stands vertically.
-          anchors.forEach(a => {
-            if (a.group.visible) {
-              // Get anchor's world quaternion
-              const worldQ = new window.THREE.Quaternion();
-              a.group.getWorldQuaternion(worldQ);
-              // Counter-rotate to cancel the anchor's world orientation
-              a.innerGroup.quaternion.copy(worldQ).invert();
-              // Apply the -90° X correction so the model stands upright
-              a.innerGroup.quaternion.multiply(uprightQ);
-            }
-          });
-
           if (arModel && arModel.userData.baseY !== undefined) {
             const t = clock.getElapsedTime();
             // Subtle float — 6mm max, no auto-spin
