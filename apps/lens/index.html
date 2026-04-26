@@ -435,7 +435,7 @@
 
   <!-- Pinch-to-rotate hint -->
   <div id="ar-hint">
-    <span>Drag to tilt · pinch to scale</span>
+    <span>Drag to spin · pinch to scale</span>
   </div>
 
   <!-- Floating bottom menu panel -->
@@ -782,8 +782,8 @@
 
     arContainer.addEventListener('touchmove', e => {
       if (isDragging && arModel && e.touches.length === 1) {
-        // X-axis only — drag up/down to tilt the model, no Y spin
-        arModel.rotation.x += (e.touches[0].clientY - lastTouchY) * 0.01;
+        // Y-axis only — drag left/right to spin the model, no X tilt
+        arModel.rotation.y += (e.touches[0].clientX - lastTouchX) * 0.01;
         lastTouchX = e.touches[0].clientX;
         lastTouchY = e.touches[0].clientY;
       }
@@ -872,12 +872,13 @@
           };
 
           a.onTargetLost = () => {
-             if (activeAnchor === a) {
-               activeAnchor = null;
-               anchorFound = false;
-               anchorStatus.classList.remove('found');
-               statusText.textContent = 'Scanning…';
-             }
+            if (activeAnchor === a) {
+              activeAnchor = null;
+              anchorFound = false;
+              anchorStatus.classList.remove('found');
+              statusText.textContent = 'Scanning…';
+              clearArModel();
+            }
           };
 
           anchors.push(a);
@@ -885,11 +886,11 @@
 
         // AR animation loop
         renderer.setAnimationLoop(() => {
-          // Counter-rotate innerGroup to cancel anchor's Y and Z rotation.
-          // Result: model only tilts with X-axis (card tilt), never spins.
+          // Counter-rotate innerGroup to cancel anchor's X and Z rotation.
+          // Result: model only spins on Y-axis, never tilts or rolls with the card.
           anchors.forEach(a => {
             if (a.group.visible) {
-              a.innerGroup.rotation.y = -a.group.rotation.y;
+              a.innerGroup.rotation.x = -a.group.rotation.x;
               a.innerGroup.rotation.z = -a.group.rotation.z;
             }
           });
