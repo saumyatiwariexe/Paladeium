@@ -415,13 +415,15 @@
     </div>
     <h2>AR Menu</h2>
     <p>Point your camera at the menu card to see dishes in 3D</p>
-    <button id="start-ar-btn" onclick="handleStartAR()">&#x1F4F7; Tap to Start AR</button>
+    <button id="start-ar-btn" onclick="handleStartAR()">Tap to Start AR</button>
     <div id="ar-init-status"></div>
   </div>
 
   <!-- No anchor message (shown when menu tap but no anchor) -->
   <div id="no-anchor-msg">
-    <div class="icon">🎯</div>
+    <div class="icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+    </div>
     <p>Point at the <strong>menu card</strong> first so the dish appears in AR</p>
   </div>
 
@@ -433,7 +435,6 @@
 
   <!-- Pinch-to-rotate hint -->
   <div id="ar-hint">
-    <span class="hint-icon">✌️</span>
     <span>Drag to tilt · pinch to scale</span>
   </div>
 
@@ -482,7 +483,7 @@
         name: 'Wagyu Smash Burger',
         desc: 'Double patty, aged cheddar, truffle aioli',
         price: '₹649',
-        emoji: '🍔',
+        emoji: '',
         cat: 'mains',
         model: 'burger.glb',
         hasAR: true,
@@ -492,7 +493,7 @@
         name: 'Margherita Classico',
         desc: 'San Marzano tomato, buffalo mozzarella',
         price: '₹549',
-        emoji: '🍕',
+        emoji: '',
         cat: 'mains',
         model: null,
         hasAR: false,
@@ -502,7 +503,7 @@
         name: 'Cacio e Pepe',
         desc: 'Tonnarelli, romano, tellicherry pepper',
         price: '₹479',
-        emoji: '🍝',
+        emoji: '',
         cat: 'mains',
         model: null,
         hasAR: false,
@@ -512,7 +513,7 @@
         name: 'Caesar Deluxe',
         desc: 'Romaine, house dressing, parmesan crisp',
         price: '₹329',
-        emoji: '🥗',
+        emoji: '',
         cat: 'starters',
         model: null,
         hasAR: false,
@@ -522,7 +523,7 @@
         name: 'Virgin Mojito',
         desc: 'Fresh lime, mint, soda, brown sugar',
         price: '₹199',
-        emoji: '🍹',
+        emoji: '',
         cat: 'drinks',
         model: null,
         hasAR: false,
@@ -532,7 +533,7 @@
         name: 'Chocolate Lava Cake',
         desc: 'Warm Valrhona centre, vanilla bean ice cream',
         price: '₹299',
-        emoji: '🍫',
+        emoji: '',
         cat: 'desserts',
         model: null,
         hasAR: false,

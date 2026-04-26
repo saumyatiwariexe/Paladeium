@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Trash2, AlertTriangle } from 'lucide-react'
 
 export default function DeleteRestaurantButton({
   id,
@@ -28,7 +29,7 @@ export default function DeleteRestaurantButton({
     try {
       const res = await fetch(`/api/restaurants/${id}`, { method: 'DELETE' })
       const data = await res.text().then(t => { try { return JSON.parse(t) } catch { return {} } })
-      if (!res.ok) throw new Error(data.error ?? 'Failed to schedule deletion')
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Failed to schedule deletion')
       close()
       router.refresh()
     } catch (err) {
@@ -44,8 +45,9 @@ export default function DeleteRestaurantButton({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-xs px-3 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/15 transition-all"
+        className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/15 transition-all"
       >
+        <Trash2 className="size-3.5" />
         Delete
       </button>
 
@@ -58,7 +60,12 @@ export default function DeleteRestaurantButton({
             className="bg-[#0f0f0f] border border-red-500/25 rounded-2xl p-6 max-w-md w-full shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            <div className="text-3xl text-center mb-4">🗑️</div>
+            <div className="flex justify-center mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                <AlertTriangle className="size-5 text-red-400" />
+              </div>
+            </div>
+
             <h2 className="text-white text-lg font-semibold text-center mb-2">Delete Restaurant?</h2>
             <p className="text-white/50 text-sm text-center mb-2 leading-relaxed">
               <span className="text-white/80 font-medium">{name}</span> will be permanently deleted

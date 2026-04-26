@@ -36,7 +36,7 @@ export default function ToggleAvailableButton({
       }`}
       title={available ? 'Disable item' : 'Enable item'}
     >
-      {loading ? '…' : available ? '● On' : '○ Off'}
+      {loading ? '…' : available ? 'On' : 'Off'}
     </button>
   )
 }

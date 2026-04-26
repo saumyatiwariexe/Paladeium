@@ -2,6 +2,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import {
+  CheckCircle2, Download, Upload, Play, RefreshCw,
+  Target, ChevronRight,
+} from 'lucide-react'
 
 interface RestaurantInfo {
   id: string
@@ -10,7 +14,6 @@ interface RestaurantInfo {
   targetsUrl: string | null
 }
 
-// ── Canvas perspective warp ────────────────────────────────────────────────
 function warpCanvas(img: HTMLImageElement, tiltX: number, tiltY = 0): HTMLCanvasElement {
   const W = img.naturalWidth || img.width
   const H = img.naturalHeight || img.height
@@ -18,10 +21,8 @@ function warpCanvas(img: HTMLImageElement, tiltX: number, tiltY = 0): HTMLCanvas
   canvas.width = W
   canvas.height = H
   const ctx = canvas.getContext('2d')!
-
   const N = 120
 
-  // Pass 1: X tilt — each horizontal strip is drawn wider/narrower
   const tmp = document.createElement('canvas')
   tmp.width = W; tmp.height = H
   const tc = tmp.getContext('2d')!
@@ -34,7 +35,6 @@ function warpCanvas(img: HTMLImageElement, tiltX: number, tiltY = 0): HTMLCanvas
     tc.drawImage(img, 0, sy, W, sh, dx, sy, dw, sh)
   }
 
-  // Pass 2: Y tilt — each vertical strip is drawn taller/shorter
   for (let i = 0; i < N; i++) {
     const t = i / N
     const yScale = Math.max(0.05, 1 + tiltY * (t - 0.5) * 1.7)
@@ -55,7 +55,6 @@ function canvasToImg(canvas: HTMLCanvasElement): Promise<HTMLImageElement> {
   })
 }
 
-// ── Component ──────────────────────────────────────────────────────────────
 export default function MarkerPage() {
   const { id } = useParams<{ id: string }>()
   const [restaurant, setRestaurant] = useState<RestaurantInfo | null>(null)
@@ -78,7 +77,6 @@ export default function MarkerPage() {
         if (data.restaurant) setRestaurant(data.restaurant)
       })
 
-    // Load MindAR compiler lazily from CDN
     if ((window as unknown as { MINDAR?: { IMAGE?: { Compiler?: unknown } } }).MINDAR?.IMAGE?.Compiler) {
       setMindARLoaded(true)
       return
@@ -126,13 +124,12 @@ export default function MarkerPage() {
         img.src = URL.createObjectURL(imageFile)
       })
 
-      // 5 perspective-warped training images for best multi-angle detection
       const warps: [number, number][] = [
-        [0, 0],        // straight on
-        [0.7, 0],      // bird's-eye forward
-        [-0.7, 0],     // back tilt
-        [0.45, 0.38],  // diagonal right
-        [0.45, -0.38], // diagonal left
+        [0, 0],
+        [0.7, 0],
+        [-0.7, 0],
+        [0.45, 0.38],
+        [0.45, -0.38],
       ]
 
       const images = await Promise.all(
@@ -153,7 +150,7 @@ export default function MarkerPage() {
       const buffer = await compiler.exportData()
       setCompiled(buffer)
       setProgress(100)
-      setSuccess(`Compiled! 5-angle target ready — ${(buffer.byteLength / 1024).toFixed(0)} KB`)
+      setSuccess(`Compiled — 5-angle target ready (${(buffer.byteLength / 1024).toFixed(0)} KB)`)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Compilation failed')
     } finally {
@@ -187,7 +184,7 @@ export default function MarkerPage() {
       if (!patchRes.ok) throw new Error(patchData.error ?? 'Failed to save')
 
       setRestaurant(prev => prev ? { ...prev, targetsUrl: uploadData.url! } : null)
-      setSuccess('Marker activated! The AR lens will use it immediately.')
+      setSuccess('Marker activated — the AR lens will use it immediately.')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Save failed')
     } finally {
@@ -205,7 +202,6 @@ export default function MarkerPage() {
 
   return (
     <div className="p-4 sm:p-8 max-w-4xl">
-      {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm mb-6 flex-wrap">
         <Link href="/restaurants" className="text-white/30 hover:text-white/60 transition-colors">Restaurants</Link>
         <span className="text-white/20">/</span>
@@ -224,21 +220,20 @@ export default function MarkerPage() {
       {/* Current marker status */}
       {restaurant?.targetsUrl && (
         <div className="bg-emerald-500/8 border border-emerald-500/20 rounded-xl p-4 mb-6 flex items-start gap-3">
-          <span className="text-emerald-400 text-lg mt-0.5">✓</span>
+          <CheckCircle2 className="size-4.5 text-emerald-400 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-emerald-400 text-sm font-medium">Marker active</p>
             <p className="text-white/35 text-xs mt-0.5 truncate">{restaurant.targetsUrl}</p>
           </div>
           <button
             onClick={() => { const a = document.createElement('a'); a.href = restaurant.targetsUrl!; a.download = 'targets.mind'; a.click() }}
-            className="text-xs px-2.5 py-1.5 rounded-lg bg-white/5 text-white/40 hover:text-white/70 transition-colors shrink-0"
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-white/5 text-white/40 hover:text-white/70 transition-colors shrink-0"
           >
-            ↓ .mind
+            <Download className="size-3.5" /> .mind
           </button>
         </div>
       )}
 
-      {/* Main flex layout */}
       <div className="flex flex-col lg:flex-row gap-6">
 
         {/* Left — image upload & preview */}
@@ -268,7 +263,7 @@ export default function MarkerPage() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                <div className="text-5xl mb-4">🎯</div>
+                <Target className="size-10 text-white/15 mb-4" />
                 <p className="text-white/60 text-sm font-medium">Drop your menu card photo here</p>
                 <p className="text-white/30 text-xs mt-1.5">or tap to browse — JPG or PNG</p>
               </div>
@@ -283,7 +278,6 @@ export default function MarkerPage() {
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f) }}
           />
 
-          {/* Tips */}
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
             {[
               'Use the physical menu card or coaster',
@@ -292,7 +286,7 @@ export default function MarkerPage() {
               'Minimum 400 × 400 px recommended',
             ].map(tip => (
               <div key={tip} className="flex items-start gap-1.5 text-xs text-white/30">
-                <span className="text-[#D4A853]/40 mt-px shrink-0">›</span>
+                <ChevronRight className="size-3.5 text-[#D4A853]/40 mt-px shrink-0" />
                 {tip}
               </div>
             ))}
@@ -330,15 +324,15 @@ export default function MarkerPage() {
             <button
               onClick={handleCompile}
               disabled={!imageFile || compiling}
-              className="w-full py-2.5 text-sm font-semibold rounded-lg bg-[#D4A853] text-black hover:bg-[#E8C06D] disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+              className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg bg-[#D4A853] text-black hover:bg-[#E8C06D] disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
             >
               {compiling
                 ? `Compiling… ${progress}%`
                 : compiled
-                  ? '↺ Recompile'
+                  ? <><RefreshCw className="size-4" /> Recompile</>
                   : !mindARLoaded
                     ? 'Loading compiler…'
-                    : '▶ Compile (5 Angles)'}
+                    : <><Play className="size-4" /> Compile (5 Angles)</>}
             </button>
 
             {!mindARLoaded && !error && (
@@ -362,21 +356,21 @@ export default function MarkerPage() {
               <button
                 onClick={handleSave}
                 disabled={!compiled || uploading}
-                className="w-full py-2.5 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
               >
-                {uploading ? 'Uploading…' : '↑ Save & Activate'}
+                <Upload className="size-4" />
+                {uploading ? 'Uploading…' : 'Save & Activate'}
               </button>
               <button
                 onClick={handleDownload}
                 disabled={!compiled}
-                className="w-full py-2 text-xs rounded-lg bg-white/[0.04] text-white/40 hover:text-white/70 hover:bg-white/[0.07] transition-all"
+                className="w-full flex items-center justify-center gap-2 py-2 text-xs rounded-lg bg-white/[0.04] text-white/40 hover:text-white/70 hover:bg-white/[0.07] transition-all"
               >
-                ↓ Download .mind (manual deploy)
+                <Download className="size-3.5" /> Download .mind (manual deploy)
               </button>
             </div>
           </div>
 
-          {/* Messages */}
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-red-400 text-sm">
               {error}
@@ -388,15 +382,14 @@ export default function MarkerPage() {
             </div>
           )}
 
-          {/* How it works */}
           <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-4">
             <p className="text-white/40 text-xs font-medium mb-2 uppercase tracking-wider">How it works</p>
             <div className="space-y-2">
               {[
-                { n: '0°', d: 'Straight-on view' },
-                { n: '+35°', d: 'Forward tilt (bird\'s eye)' },
-                { n: '−35°', d: 'Back tilt' },
-                { n: 'Diag ×2', d: 'Left + right diagonals' },
+                { n: '0°',     d: 'Straight-on view' },
+                { n: '+35°',   d: "Forward tilt (bird's eye)" },
+                { n: '−35°',   d: 'Back tilt' },
+                { n: 'Diag x2', d: 'Left + right diagonals' },
               ].map(row => (
                 <div key={row.n} className="flex items-center gap-2 text-xs">
                   <span className="font-mono text-[#D4A853]/70 w-14 shrink-0">{row.n}</span>

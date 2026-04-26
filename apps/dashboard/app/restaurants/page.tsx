@@ -1,5 +1,6 @@
 import { readDb, purgeExpiredDeletions } from '@/lib/db'
 import Link from 'next/link'
+import { Store, ExternalLink, AlertTriangle, Plus } from 'lucide-react'
 import DeleteRestaurantButton from './DeleteRestaurantButton'
 import CancelDeletionButton from './CancelDeletionButton'
 
@@ -12,9 +13,7 @@ function StatusBadge({ status }: { status: string }) {
     inactive:        'bg-red-500/10     text-red-400     border-red-500/20',
     pendingDeletion: 'bg-red-500/20     text-red-300     border-red-500/30',
   }
-  const labels: Record<string, string> = {
-    pendingDeletion: 'deleting soon',
-  }
+  const labels: Record<string, string> = { pendingDeletion: 'deleting soon' }
   return (
     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${map[status] ?? map.inactive}`}>
       {labels[status] ?? status}
@@ -35,7 +34,6 @@ export default async function RestaurantsPage() {
 
   return (
     <div className="p-8 max-w-6xl">
-      {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-2xl font-semibold text-white">Restaurants</h1>
@@ -47,14 +45,13 @@ export default async function RestaurantsPage() {
           href="/restaurants/new"
           className="flex items-center gap-2 bg-[#D4A853] text-black text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-[#E8C06D] active:scale-95 transition-all"
         >
-          <span>+</span> Add Restaurant
+          <Plus className="size-4" /> Add Restaurant
         </Link>
       </div>
 
-      {/* Empty state */}
       {restaurants.length === 0 && (
         <div className="flex flex-col items-center justify-center py-32 text-center">
-          <div className="text-5xl mb-4">🏪</div>
+          <Store className="size-12 text-white/15 mb-5" />
           <p className="text-white/50 text-lg font-medium">No restaurants yet</p>
           <p className="text-white/30 text-sm mt-1 mb-6">Add your first restaurant to start building AR menus</p>
           <Link
@@ -66,7 +63,6 @@ export default async function RestaurantsPage() {
         </div>
       )}
 
-      {/* Restaurant grid */}
       {restaurants.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {restaurants.map(r => {
@@ -86,17 +82,15 @@ export default async function RestaurantsPage() {
                     : 'bg-white/[0.025] border-white/[0.07] hover:border-[#D4A853]/30 hover:bg-white/[0.04]'
                 }`}
               >
-                {/* Pending-deletion warning banner */}
                 {isPendingDeletion && days !== null && (
                   <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-4">
-                    <span className="text-red-400 text-xs">⚠</span>
+                    <AlertTriangle className="size-3.5 text-red-400 shrink-0" />
                     <p className="text-red-400 text-xs flex-1">
                       Scheduled for deletion in <strong>{days} day{days !== 1 ? 's' : ''}</strong>
                     </p>
                   </div>
                 )}
 
-                {/* Title row */}
                 <div className="flex items-start justify-between mb-1">
                   <h3 className={`font-semibold transition-colors ${isPendingDeletion ? 'text-white/50' : 'text-white group-hover:text-[#F0EDE8]'}`}>
                     {r.name}
@@ -104,28 +98,24 @@ export default async function RestaurantsPage() {
                   <StatusBadge status={r.status} />
                 </div>
 
-                {/* Slug */}
                 <p className="text-[#D4A853]/60 text-xs font-mono mb-2">/{r.slug}</p>
 
-                {/* Description */}
                 {r.description && (
                   <p className="text-white/40 text-xs mb-3 line-clamp-1">{r.description}</p>
                 )}
 
-                {/* Stats */}
                 <div className="flex gap-3 text-xs text-white/35 mb-4 py-3 border-y border-white/[0.06]">
                   <span>{cats.length} categor{cats.length !== 1 ? 'ies' : 'y'}</span>
-                  <span>·</span>
+                  <span className="text-white/15">·</span>
                   <span>{items.length} item{items.length !== 1 ? 's' : ''}</span>
                   {arItems > 0 && (
                     <>
-                      <span>·</span>
+                      <span className="text-white/15">·</span>
                       <span className="text-[#D4A853]/70">{arItems} AR</span>
                     </>
                   )}
                 </div>
 
-                {/* Actions */}
                 {isPendingDeletion ? (
                   <div className="flex gap-2">
                     <CancelDeletionButton id={r.id} />
@@ -144,7 +134,7 @@ export default async function RestaurantsPage() {
                       rel="noopener noreferrer"
                       className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-[#D4A853]/10 text-[#D4A853] hover:bg-[#D4A853]/20 transition-colors border border-[#D4A853]/15"
                     >
-                      <span>↗</span> AR Preview
+                      AR Preview <ExternalLink className="size-3" />
                     </a>
                     <DeleteRestaurantButton id={r.id} name={r.name} />
                   </div>

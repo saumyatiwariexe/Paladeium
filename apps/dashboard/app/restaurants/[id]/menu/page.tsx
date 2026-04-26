@@ -1,6 +1,7 @@
 import { readDb } from '@/lib/db'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { Target, ExternalLink, Plus, Utensils } from 'lucide-react'
 import CopyButton from './CopyButton'
 import DeleteItemButton from './DeleteItemButton'
 import ToggleAvailableButton from './ToggleAvailableButton'
@@ -9,10 +10,10 @@ const LENS_URL = process.env.LENS_URL ?? 'http://localhost:3001'
 
 function DietaryTag({ tag }: { tag: string }) {
   const map: Record<string, string> = {
-    veg:      'bg-green-500/10 text-green-400',
-    vegan:    'bg-teal-500/10  text-teal-400',
-    'non-veg':'bg-red-500/10   text-red-400',
-    jain:     'bg-purple-500/10 text-purple-400',
+    veg:          'bg-green-500/10 text-green-400',
+    vegan:        'bg-teal-500/10  text-teal-400',
+    'non-veg':    'bg-red-500/10   text-red-400',
+    jain:         'bg-purple-500/10 text-purple-400',
   }
   return (
     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${map[tag] ?? 'bg-white/10 text-white/40'}`}>
@@ -64,7 +65,7 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
             href={`/restaurants/${params.id}/marker`}
             className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-white/5 text-white/50 hover:text-white/80 hover:bg-white/[0.08] transition-colors border border-white/10"
           >
-            🎯 AR Marker
+            <Target className="size-3.5" /> AR Marker
           </Link>
           <a
             href={`${LENS_URL}?r=${restaurant.slug}`}
@@ -72,13 +73,13 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-[#D4A853]/10 text-[#D4A853] hover:bg-[#D4A853]/20 transition-colors border border-[#D4A853]/15"
           >
-            ↗ View AR Lens
+            View AR Lens <ExternalLink className="size-3" />
           </a>
           <Link
             href={`/restaurants/${params.id}/menu/new`}
             className="flex items-center gap-1.5 bg-[#D4A853] text-black text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[#E8C06D] active:scale-95 transition-all"
           >
-            + Add Item
+            <Plus className="size-4" /> Add Item
           </Link>
         </div>
       </div>
@@ -93,17 +94,16 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Empty state */}
-
       {items.length === 0 && (
         <div className="flex flex-col items-center py-24 text-center">
-          <div className="text-4xl mb-4">🍽</div>
+          <Utensils className="size-10 text-white/15 mb-5" />
           <p className="text-white/50 font-medium">No menu items yet</p>
           <p className="text-white/30 text-sm mt-1 mb-5">Add dishes so customers can browse and order via AR</p>
           <Link
             href={`/restaurants/${params.id}/menu/new`}
-            className="bg-[#D4A853] text-black text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-[#E8C06D] transition-colors"
+            className="flex items-center gap-2 bg-[#D4A853] text-black text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-[#E8C06D] transition-colors"
           >
-            + Add First Item
+            <Plus className="size-4" /> Add First Item
           </Link>
         </div>
       )}
@@ -115,7 +115,8 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
         return (
           <div key={cat.id} className="mb-8">
             <h2 className="text-white/70 text-sm font-semibold uppercase tracking-widest mb-3 flex items-center gap-2">
-              <span>{cat.emoji}</span> {cat.name}
+              {cat.emoji && <span>{cat.emoji}</span>}
+              {cat.name}
               <span className="text-white/25 font-normal normal-case tracking-normal text-xs">({catItems.length})</span>
             </h2>
             <div className="space-y-2">
@@ -128,10 +129,12 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
                       : 'bg-white/[0.01] border-white/[0.04] opacity-50'
                   }`}
                 >
-                  {/* Emoji */}
-                  <div className="text-2xl w-10 text-center shrink-0">{item.emoji || '🍽'}</div>
+                  <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                    {item.emoji
+                      ? <span className="text-2xl">{item.emoji}</span>
+                      : <Utensils className="size-5 text-white/20" />}
+                  </div>
 
-                  {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-white text-sm">{item.name}</span>
@@ -145,10 +148,8 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
                     <p className="text-white/35 text-xs mt-0.5 truncate">{item.description}</p>
                   </div>
 
-                  {/* Price */}
                   <div className="text-white/80 font-semibold text-sm shrink-0">₹{item.price}</div>
 
-                  {/* Actions */}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     <ToggleAvailableButton
                       restaurantSlug={restaurant.slug}
@@ -185,7 +186,11 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
             <div className="space-y-2">
               {uncategorised.map(item => (
                 <div key={item.id} className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.025] border border-white/[0.07]">
-                  <div className="text-2xl w-10 text-center">{item.emoji || '🍽'}</div>
+                  <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                    {item.emoji
+                      ? <span className="text-2xl">{item.emoji}</span>
+                      : <Utensils className="size-5 text-white/20" />}
+                  </div>
                   <div className="flex-1">
                     <span className="font-medium text-white text-sm">{item.name}</span>
                     <p className="text-white/35 text-xs mt-0.5">{item.description}</p>
@@ -200,4 +205,3 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
     </div>
   )
 }
-

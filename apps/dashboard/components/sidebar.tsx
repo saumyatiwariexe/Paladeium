@@ -2,9 +2,10 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { Store, LogOut, type LucideIcon } from 'lucide-react'
 
-const nav = [
-  { label: 'Restaurants', href: '/restaurants', icon: '🏪' },
+const nav: { label: string; href: string; icon: LucideIcon }[] = [
+  { label: 'Restaurants', href: '/restaurants', icon: Store },
 ]
 
 export default function Sidebar() {
@@ -21,16 +22,15 @@ export default function Sidebar() {
 
   return (
     <aside className="w-60 shrink-0 bg-[#0F0F1A] border-r border-white/5 flex flex-col">
-      {/* Logo */}
       <div className="px-6 py-5 border-b border-white/5">
         <div className="text-[#D4A853] font-bold text-lg tracking-widest uppercase">Paladeium</div>
         <div className="text-white/30 text-[11px] mt-0.5 tracking-wide">Admin Dashboard</div>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 p-3 space-y-0.5">
         {nav.map(item => {
           const active = path.startsWith(item.href)
+          const Icon = item.icon
           return (
             <Link
               key={item.href}
@@ -41,14 +41,13 @@ export default function Sidebar() {
                   : 'text-white/50 hover:text-white/80 hover:bg-white/[0.04]'
               }`}
             >
-              <span className="text-base">{item.icon}</span>
+              <Icon className="size-4 shrink-0" />
               <span>{item.label}</span>
             </Link>
           )
         })}
       </nav>
 
-      {/* Footer */}
       <div className="px-5 py-4 border-t border-white/5 space-y-3">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -59,7 +58,7 @@ export default function Sidebar() {
           disabled={loggingOut}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-all disabled:opacity-50"
         >
-          <span>↪</span>
+          <LogOut className="size-3.5 shrink-0" />
           <span>{loggingOut ? 'Signing out…' : 'Sign out'}</span>
         </button>
       </div>

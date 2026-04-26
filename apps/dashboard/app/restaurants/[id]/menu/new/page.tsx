@@ -30,7 +30,7 @@ export default function NewMenuItemPage() {
   const [error, setError] = useState('')
   const [form, setForm] = useState<ItemData>({
     name: '', description: '', price: '', emoji: '',
-    categoryId: '', newCategoryName: '', newCategoryEmoji: '🍽',
+    categoryId: '', newCategoryName: '', newCategoryEmoji: '',
     modelUrl: '', hasAr: false, dietaryTags: [], available: true,
   })
 
@@ -83,10 +83,10 @@ export default function NewMenuItemPage() {
       name: form.name.trim(),
       description: form.description.trim(),
       price: Number(form.price),
-      emoji: form.emoji.trim() || '🍽',
+      emoji: form.emoji.trim(),
       categoryId: form.categoryId,
       newCategoryName: form.newCategoryName.trim(),
-      newCategoryEmoji: form.newCategoryEmoji,
+      newCategoryEmoji: form.newCategoryEmoji.trim(),
       modelUrl: form.modelUrl.trim(),
       hasAr: form.hasAr,
       dietaryTags: form.dietaryTags,
@@ -154,8 +154,8 @@ export default function NewMenuItemPage() {
                 type="text"
                 value={form.newCategoryEmoji}
                 onChange={e => setForm(f => ({ ...f, newCategoryEmoji: e.target.value }))}
-                placeholder="🍽"
-                className="w-14 px-3 py-2.5 text-center text-lg rounded-lg bg-white/[0.04] border border-white/10 text-white"
+                placeholder="Icon"
+                className="w-14 px-3 py-2.5 text-center text-lg rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/30 placeholder:text-sm"
               />
               <input
                 type="text"
@@ -171,12 +171,12 @@ export default function NewMenuItemPage() {
         {/* Emoji + Name */}
         <div className="flex gap-3">
           <div>
-            <label className="block text-sm text-white/60 font-medium mb-1.5">Emoji</label>
+            <label className="block text-sm text-white/60 font-medium mb-1.5">Icon</label>
             <input
               type="text"
               value={form.emoji}
               onChange={e => setForm(f => ({ ...f, emoji: e.target.value }))}
-              placeholder="🍔"
+              placeholder=""
               className="w-16 px-3 py-3 text-center text-xl rounded-lg bg-white/[0.04] border border-white/10 text-white"
             />
           </div>
