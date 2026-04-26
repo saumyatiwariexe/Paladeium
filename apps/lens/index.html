@@ -710,9 +710,7 @@
 
     function clearArModel() {
       if (arModel) {
-        if (correctGroup) correctGroup.remove(arModel);
         anchors.forEach(a => {
-          a.group.remove(arModel);
           if (a.innerGroup) a.innerGroup.remove(arModel);
         });
         arModel = null;
@@ -757,8 +755,8 @@
           arModel.userData.baseY = baseY;
           arModel.position.set(-center.x * scale, baseY, -center.z * scale);
 
-          // Attach to the EMA virtual anchor's corrective sub-group
-          if (correctGroup) correctGroup.add(arModel);
+          // Attach to the active anchor's innerGroup (MindAR manages its world pose)
+          if (activeAnchor?.innerGroup) activeAnchor.innerGroup.add(arModel);
           console.log('[AR] Model loaded ✓ scale=', scale.toFixed(4), 'baseY=', baseY.toFixed(4));
 
           // Show rotation hint
@@ -833,64 +831,6 @@
     // arStarted declared here (before any async IIFE) to avoid TDZ errors
     let arStarted = false;
 
-    // ═══════════════════════════════════════════════════════════════
-    // PROFESSIONAL AR STABILIZATION PIPELINE
-    //
-    // Layer 1 — MindAR with heavily tuned One-Euro filter
-    // Layer 2 — Application-level EMA smoother (virtual anchor)
-    // Layer 3 — IMU / DeviceOrientation fusion (hold on loss)
-    //
-    // NOTE: All window.THREE objects are created INSIDE startAR(),
-    // which only runs after getThreeLibs() has loaded THREE.
-    // Only plain-JS IMU state lives here at module scope.
-    // ═══════════════════════════════════════════════════════════════
-
-    // IMU state — plain JS, safe to create at page load
-    let _imuCurArr = [0, 0, 0, 1]; // [x,y,z,w] — updated by deviceorientation
-    let _imuLockArr = null;         // snapshot at last stable anchor frame
-    let _hasIMU = false;
-    let gyroRate = 0;               // magnitude of angular velocity (rad/s) from DeviceMotion
-
-    // Request DeviceOrientation + DeviceMotion permissions (iOS 13+) and start listening
-    (async () => {
-      // DeviceOrientation
-      if (typeof DeviceOrientationEvent !== 'undefined' &&
-          typeof DeviceOrientationEvent.requestPermission === 'function') {
-        const p = await DeviceOrientationEvent.requestPermission().catch(() => 'denied');
-        if (p !== 'granted') return;
-      }
-      window.addEventListener('deviceorientation', (e) => {
-        _hasIMU = true;
-        _imuCurArr = [e.alpha || 0, e.beta || 0, e.gamma || 0];
-      }, { passive: true });
-
-      // DeviceMotion — gyroscope angular velocity for adaptive EMA
-      if (typeof DeviceMotionEvent !== 'undefined' &&
-          typeof DeviceMotionEvent.requestPermission === 'function') {
-        const p = await DeviceMotionEvent.requestPermission().catch(() => 'denied');
-        if (p !== 'granted') return;
-      }
-      window.addEventListener('devicemotion', (e) => {
-        const r = e.rotationRate;
-        if (r) {
-          const ax = (r.alpha || 0) * Math.PI / 180;
-          const bx = (r.beta  || 0) * Math.PI / 180;
-          const gx = (r.gamma || 0) * Math.PI / 180;
-          gyroRate = Math.sqrt(ax*ax + bx*bx + gx*gx);
-        }
-      }, { passive: true });
-    })();
-
-    // THREE-dependent pipeline state — populated inside startAR()
-    let _imuCur     = null;  // THREE.Quaternion — live device orientation
-    let _imuLock    = null;  // THREE.Quaternion — snapshot at lock
-    let _sPos       = null;  // THREE.Vector3    — smoothed position
-    let _sQuat      = null;  // THREE.Quaternion — smoothed rotation
-    let _poseReady  = false;
-    let virtualAnchor = null;  // THREE.Group — model's actual parent
-    let correctGroup  = null;  // THREE.Group — upright correction
-    const POS_A = 0.14;
-    const ROT_A = 0.12;
 
     async function startAR() {
       console.log('[AR] Starting MindAR...');
@@ -905,10 +845,10 @@
           uiLoading: 'no',
           uiScanning: 'no',
           uiError: 'no',
-          filterMinCF:      0.0001,
-          filterBeta:       0.0001,
-          warmupTolerance:  3,
-          missTolerance:    120,
+          filterMinCF:  0.00001,
+          filterBeta:   0.01,
+          warmupTolerance: 12,
+          missTolerance:   30,
         });
 
         renderer = mindarThree.renderer;
@@ -922,45 +862,24 @@
         const fl = new window.THREE.DirectionalLight(0xd4a853, 0.8);
         fl.position.set(-2, 1, -1); scene.add(fl);
 
-        // Init THREE-dependent pipeline objects (THREE is guaranteed loaded here)
-        _imuCur       = new window.THREE.Quaternion();
-        _sPos         = new window.THREE.Vector3();
-        _sQuat        = new window.THREE.Quaternion();
-        virtualAnchor = new window.THREE.Group();
-        scene.add(virtualAnchor);
-        correctGroup  = new window.THREE.Group();
-        // No static rotation hack — quaternion inversion handles upright correction per-frame
-        virtualAnchor.add(correctGroup);
-
-        // Converts raw DeviceOrientation numbers → THREE.Quaternion each frame
-        function syncIMU() {
-          if (!_hasIMU || !_imuCur) return;
-          const [alpha, beta, gamma] = _imuCurArr;
-          _imuCur.setFromEuler(new window.THREE.Euler(
-            window.THREE.MathUtils.degToRad(beta),
-            window.THREE.MathUtils.degToRad(alpha),
-           -window.THREE.MathUtils.degToRad(gamma),
-            'YXZ'
-          ));
-        }
-
         // ─── Anchors — try up to 5 (one per compiled perspective warp) ──
-        let _isHolding = false;
-        let _activeAnchorGroup = null; // which anchor group is currently driving pose
-
         for (let i = 0; i < 5; i++) {
           let a;
           try { a = mindarThree.addAnchor(i); } catch(e) {
-            console.log(`[AR] Mind file has ${i} target(s) — stopping anchor creation.`);
+            console.log(`[AR] Mind file has ${i} target(s).`);
             break;
           }
+
+          // innerGroup is a child of MindAR's anchor group.
+          // MindAR automatically drives a.group's world pose; innerGroup
+          // corrects the rotation per-frame so the model is world-aligned.
+          a.innerGroup = new window.THREE.Group();
+          a.group.add(a.innerGroup);
           anchors.push(a);
 
           a.onTargetFound = () => {
-            _activeAnchorGroup = a.group;
             activeAnchor = a;
             anchorFound  = true;
-            _isHolding   = false;
             scanOverlay.classList.add('hidden');
             menuPanel.classList.add('visible');
             menuPanel.classList.remove('minimized');
@@ -972,21 +891,17 @@
               if (dish?.model && !arModel) {
                 loadArModel(dish.model);
               } else if (arModel) {
-                correctGroup.add(arModel);
+                a.innerGroup.add(arModel);
               }
             }
           };
 
           a.onTargetLost = () => {
-            // Only trigger hold/lost when the currently active anchor is lost
-            if (_activeAnchorGroup !== a.group) return;
-            _activeAnchorGroup = null;
+            if (activeAnchor !== a) return;
             activeAnchor = null;
             anchorFound  = false;
-            _isHolding   = true;
-            if (_hasIMU) _imuLock = _imuCur.clone();
             anchorStatus.classList.remove('found');
-            statusText.textContent = 'Holding…';
+            statusText.textContent = 'Scanning…';
             clearArModel();
           };
         }
@@ -994,59 +909,16 @@
         if (anchors.length === 0) throw new Error('No valid targets in mind file');
 
         // ─── Animation loop ─────────────────────────────────────────
-        const _rawP = new window.THREE.Vector3();
-        const _rawQ = new window.THREE.Quaternion();
-        const _rawS = new window.THREE.Vector3();
-
         renderer.setAnimationLoop(() => {
-          syncIMU(); // keep _imuCur in sync with latest gyro reading
-
-          // Adaptive EMA alpha — more smoothing when device is steady
-          const speed = Math.min(gyroRate, 5); // cap at 5 rad/s
-          const posA = POS_A + speed * 0.04;
-          const rotA = ROT_A + speed * 0.04;
-
-          // Find the first visible anchor to drive the virtual anchor pose
-          const visibleAnchor = anchors.find(a => a.group.visible);
-
-          if (visibleAnchor) {
-            // ── Layer 2: read raw pose, apply adaptive EMA ──────────
-            visibleAnchor.group.updateMatrixWorld(true);
-            visibleAnchor.group.matrixWorld.decompose(_rawP, _rawQ, _rawS);
-
-            if (!_poseReady) {
-              _sPos.copy(_rawP);
-              _sQuat.copy(_rawQ);
-              _poseReady = true;
-            } else {
-              _sPos.lerp(_rawP,   posA);
-              _sQuat.slerp(_rawQ, rotA);
+          // Per-frame world-alignment: invert each anchor's world rotation
+          // so the model stays upright regardless of how the marker is angled.
+          anchors.forEach(a => {
+            if (a.group.visible && a.innerGroup) {
+              a.innerGroup.quaternion.copy(a.group.quaternion).invert();
             }
+          });
 
-            // Drive virtualAnchor with smoothed pose
-            virtualAnchor.position.copy(_sPos);
-            virtualAnchor.quaternion.copy(_sQuat);
-
-            // ── Per-frame upright correction ─────────────────────────
-            // Invert the anchor's world rotation so model stays world-aligned (upright)
-            correctGroup.quaternion.copy(_sQuat).invert();
-
-            // Refresh IMU lock every frame while anchor is visible
-            if (_hasIMU) _imuLock = _imuCur.clone();
-            _isHolding = false;
-
-          } else if (_isHolding && _poseReady) {
-            // ── Layer 3: IMU hold ─────────────────────────────────────
-            if (_hasIMU && _imuLock) {
-              const dQ = _imuLock.clone().invert().premultiply(_imuCur.clone());
-              virtualAnchor.position.copy(_sPos).applyQuaternion(dQ.clone().invert());
-              virtualAnchor.quaternion.copy(_sQuat).premultiply(dQ.clone().invert());
-              // Keep correction in sync during hold
-              correctGroup.quaternion.copy(virtualAnchor.quaternion).invert();
-            }
-          }
-
-          // Subtle float on the model
+          // Subtle float
           if (arModel && arModel.userData.baseY !== undefined) {
             const t = clock.getElapsedTime();
             arModel.position.y = arModel.userData.baseY + Math.sin(t * 1.2) * 0.006;
