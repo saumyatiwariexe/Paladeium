@@ -668,13 +668,15 @@
       const dish = MENU.find(d => d.id === dishId);
       if (!dish) return;
 
+      // Always track which dish is selected so onTargetFound can reload it
+      activeDishId = dishId;
+
       // Update active state
       document.querySelectorAll('.dish-card').forEach(c => c.classList.remove('active'));
       const card = document.getElementById('dish-' + dishId);
       if (card) card.classList.add('active');
 
       if (!dish.model) {
-        activeDishId = dishId;
         clearArModel();
         showNoAnchorMsg(false);
         return;
@@ -927,12 +929,16 @@
           ));
         }
 
-        // ─── 5 anchors (one per compiled perspective warp) ──────────
+        // ─── Anchors — try up to 5 (one per compiled perspective warp) ──
         let _isHolding = false;
         let _activeAnchorGroup = null; // which anchor group is currently driving pose
 
         for (let i = 0; i < 5; i++) {
-          const a = mindarThree.addAnchor(i);
+          let a;
+          try { a = mindarThree.addAnchor(i); } catch(e) {
+            console.log(`[AR] Mind file has ${i} target(s) — stopping anchor creation.`);
+            break;
+          }
           anchors.push(a);
 
           a.onTargetFound = () => {
@@ -969,6 +975,8 @@
             clearArModel();
           };
         }
+
+        if (anchors.length === 0) throw new Error('No valid targets in mind file');
 
         // ─── Animation loop ─────────────────────────────────────────
         const _rawP = new window.THREE.Vector3();
