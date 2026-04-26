@@ -847,7 +847,7 @@
         // MindAR's image-target space has Y pointing INTO the card plane (i.e. the
         // model's up-axis maps to the camera direction), so we must pre-rotate it.
         const uprightQ = new window.THREE.Quaternion();
-        uprightQ.setFromEuler(new window.THREE.Euler(-Math.PI / 2, 0, 0));
+        uprightQ.setFromEuler(new window.THREE.Euler(Math.PI / 2, 0, 0));
 
         // Instantiate 5 anchors for multi-perspective tracking
         for (let i = 0; i < 5; i++) {
