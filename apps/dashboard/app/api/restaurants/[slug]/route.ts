@@ -5,10 +5,11 @@ import { readDb, writeDb } from '@/lib/db'
 type Params = { params: { slug: string } }
 
 const RestaurantUpdateSchema = z.object({
-  name: z.string().min(1).max(100).trim().optional(),
-  description: z.string().max(500).optional(),
-  status: z.enum(['active', 'inactive', 'pending']).optional(),
+  name:       z.string().min(1).max(100).trim().optional(),
+  description:z.string().max(500).optional(),
+  status:     z.enum(['active', 'inactive', 'pending', 'pendingDeletion']).optional(),
   targetsUrl: z.string().url().nullable().optional(),
+  deleteAt:   z.string().nullable().optional(),
 }).strict()
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -56,17 +57,22 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 }
 
+// Soft-delete: schedules permanent removal after 15 days
 export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
     const db = await readDb()
-    const restaurant = db.restaurants.find(r => r.slug === params.slug || r.id === params.slug)
-    if (!restaurant) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const idx = db.restaurants.findIndex(r => r.slug === params.slug || r.id === params.slug)
+    if (idx === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    db.restaurants = db.restaurants.filter(r => r.id !== restaurant.id)
-    db.categories  = db.categories.filter(c => c.restaurantId !== restaurant.id)
-    db.items       = db.items.filter(i => i.restaurantId !== restaurant.id)
+    const deleteAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString()
+    db.restaurants[idx] = {
+      ...db.restaurants[idx],
+      status: 'pendingDeletion',
+      deleteAt,
+      updatedAt: new Date().toISOString(),
+    }
     await writeDb(db)
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, deleteAt })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

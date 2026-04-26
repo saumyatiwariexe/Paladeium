@@ -1,4 +1,4 @@
-export type RestaurantStatus = 'active' | 'inactive' | 'pending'
+export type RestaurantStatus = 'active' | 'inactive' | 'pending' | 'pendingDeletion'
 
 export interface Restaurant {
   id: string
@@ -7,6 +7,7 @@ export interface Restaurant {
   description: string
   status: RestaurantStatus
   targetsUrl: string | null
+  deleteAt?: string | null
   createdAt: string
   updatedAt: string
 }

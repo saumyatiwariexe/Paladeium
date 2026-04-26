@@ -1,22 +1,33 @@
-import { readDb } from '@/lib/db'
+import { readDb, purgeExpiredDeletions } from '@/lib/db'
 import Link from 'next/link'
+import DeleteRestaurantButton from './DeleteRestaurantButton'
+import CancelDeletionButton from './CancelDeletionButton'
 
 const LENS_URL = process.env.LENS_URL ?? 'http://localhost:3001'
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    active:   'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    pending:  'bg-amber-500/10   text-amber-400   border-amber-500/20',
-    inactive: 'bg-red-500/10    text-red-400      border-red-500/20',
+    active:          'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    pending:         'bg-amber-500/10   text-amber-400   border-amber-500/20',
+    inactive:        'bg-red-500/10     text-red-400     border-red-500/20',
+    pendingDeletion: 'bg-red-500/20     text-red-300     border-red-500/30',
+  }
+  const labels: Record<string, string> = {
+    pendingDeletion: 'deleting soon',
   }
   return (
     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${map[status] ?? map.inactive}`}>
-      {status}
+      {labels[status] ?? status}
     </span>
   )
 }
 
+function daysLeft(deleteAt: string): number {
+  return Math.max(0, Math.ceil((new Date(deleteAt).getTime() - Date.now()) / 86_400_000))
+}
+
 export default async function RestaurantsPage() {
+  await purgeExpiredDeletions()
   const db = await readDb()
   const restaurants = db.restaurants.sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -59,19 +70,35 @@ export default async function RestaurantsPage() {
       {restaurants.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {restaurants.map(r => {
-            const items    = db.items.filter(i => i.restaurantId === r.id)
-            const arItems  = items.filter(i => i.hasAr).length
-            const cats     = db.categories.filter(c => c.restaurantId === r.id)
-            const arLink   = `${LENS_URL}?r=${r.slug}`
+            const items   = db.items.filter(i => i.restaurantId === r.id)
+            const arItems = items.filter(i => i.hasAr).length
+            const cats    = db.categories.filter(c => c.restaurantId === r.id)
+            const arLink  = `${LENS_URL}?r=${r.slug}`
+            const isPendingDeletion = r.status === 'pendingDeletion'
+            const days = isPendingDeletion && r.deleteAt ? daysLeft(r.deleteAt) : null
 
             return (
               <div
                 key={r.id}
-                className="group bg-white/[0.025] border border-white/[0.07] rounded-xl p-5 hover:border-[#D4A853]/30 hover:bg-white/[0.04] transition-all"
+                className={`group rounded-xl p-5 border transition-all ${
+                  isPendingDeletion
+                    ? 'bg-red-500/[0.04] border-red-500/25 hover:border-red-500/40'
+                    : 'bg-white/[0.025] border-white/[0.07] hover:border-[#D4A853]/30 hover:bg-white/[0.04]'
+                }`}
               >
+                {/* Pending-deletion warning banner */}
+                {isPendingDeletion && days !== null && (
+                  <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-4">
+                    <span className="text-red-400 text-xs">⚠</span>
+                    <p className="text-red-400 text-xs flex-1">
+                      Scheduled for deletion in <strong>{days} day{days !== 1 ? 's' : ''}</strong>
+                    </p>
+                  </div>
+                )}
+
                 {/* Title row */}
                 <div className="flex items-start justify-between mb-1">
-                  <h3 className="font-semibold text-white group-hover:text-[#F0EDE8] transition-colors">
+                  <h3 className={`font-semibold transition-colors ${isPendingDeletion ? 'text-white/50' : 'text-white group-hover:text-[#F0EDE8]'}`}>
                     {r.name}
                   </h3>
                   <StatusBadge status={r.status} />
@@ -99,22 +126,29 @@ export default async function RestaurantsPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2">
-                  <Link
-                    href={`/restaurants/${r.id}/menu`}
-                    className="flex-1 text-center text-xs font-medium py-2 rounded-lg bg-white/[0.05] text-white/60 hover:bg-white/[0.09] hover:text-white transition-all"
-                  >
-                    Manage Menu
-                  </Link>
-                  <a
-                    href={arLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-[#D4A853]/10 text-[#D4A853] hover:bg-[#D4A853]/20 transition-colors border border-[#D4A853]/15"
-                  >
-                    <span>↗</span> AR Preview
-                  </a>
-                </div>
+                {isPendingDeletion ? (
+                  <div className="flex gap-2">
+                    <CancelDeletionButton id={r.id} />
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Link
+                      href={`/restaurants/${r.id}/menu`}
+                      className="flex-1 text-center text-xs font-medium py-2 rounded-lg bg-white/[0.05] text-white/60 hover:bg-white/[0.09] hover:text-white transition-all"
+                    >
+                      Manage Menu
+                    </Link>
+                    <a
+                      href={arLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-[#D4A853]/10 text-[#D4A853] hover:bg-[#D4A853]/20 transition-colors border border-[#D4A853]/15"
+                    >
+                      <span>↗</span> AR Preview
+                    </a>
+                    <DeleteRestaurantButton id={r.id} name={r.name} />
+                  </div>
+                )}
               </div>
             )
           })}
