@@ -41,9 +41,10 @@ export default function NewMenuItemPage() {
         const d = data as { categories?: Category[]; restaurant?: { slug: string } }
         setCategories(d.categories ?? [])
         setRestaurantSlug(d.restaurant?.slug ?? '')
-        if (d.categories?.length) {
-          setForm(f => ({ ...f, categoryId: d.categories![0].id }))
-        }
+        setForm(f => ({
+          ...f,
+          categoryId: d.categories?.length ? d.categories![0].id : '__new__',
+        }))
       })
     if (editId) {
       fetch(`/api/restaurants/${id}/menu/${editId}`)
@@ -94,8 +95,8 @@ export default function NewMenuItemPage() {
 
     try {
       const url = editId
-        ? `/api/restaurants/${restaurantSlug}/menu/${editId}`
-        : `/api/restaurants/${restaurantSlug}/menu`
+        ? `/api/restaurants/${id}/menu/${editId}`
+        : `/api/restaurants/${id}/menu`
       const res = await fetch(url, {
         method: editId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,6 +105,7 @@ export default function NewMenuItemPage() {
       const data = await safeJson(res) as { error?: string }
       if (!res.ok) throw new Error(data.error ?? 'Failed to save item')
       router.push(`/restaurants/${id}/menu`)
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
