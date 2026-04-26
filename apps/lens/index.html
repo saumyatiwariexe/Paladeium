@@ -608,7 +608,18 @@
           const res = await fetch(`${DASHBOARD_API}/api/restaurants/${slug}/menu`);
           if (res.ok) {
             const data = await res.json();
-            if (Array.isArray(data.menu) && data.menu.length) MENU = data.menu;
+            if (Array.isArray(data.menu) && data.menu.length) {
+              MENU = data.menu.map(item => ({
+                id:     item.id,
+                name:   item.name,
+                desc:   item.description ?? item.desc ?? '',
+                price:  typeof item.price === 'number' ? '₹' + item.price : (item.price ?? ''),
+                emoji:  item.emoji ?? '',
+                cat:    (item.categoryId ?? item.cat ?? 'mains').toLowerCase(),
+                model:  item.modelUrl ?? item.model ?? null,
+                hasAR:  item.hasAr ?? item.hasAR ?? false,
+              }));
+            }
             if (data.restaurant?.name) document.title = `${data.restaurant.name} — AR Menu`;
             if (data.restaurant?.targetsUrl) TARGETS_SRC = data.restaurant.targetsUrl;
             if (Array.isArray(data.categories) && data.categories.length) {
