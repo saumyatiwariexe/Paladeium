@@ -815,24 +815,27 @@
       }
     };
 
+    // arStarted declared here (before any async IIFE) to avoid TDZ errors
+    let arStarted = false;
+
     // ═══════════════════════════════════════════════════════════════
     // PROFESSIONAL AR STABILIZATION PIPELINE
     //
     // Layer 1 — MindAR with heavily tuned One-Euro filter
-    //   ↓  Raw pose (position + quaternion) from image detection
-    // Layer 2 — Application-level EMA smoother
-    //   ↓  Smoothed pose applied to a virtual anchor in scene
-    // Layer 3 — IMU / DeviceOrientation fusion
-    //   ↓  When marker is lost, gyro delta rotates the held pose
-    //      so the model stays in world space (not camera space)
+    // Layer 2 — Application-level EMA smoother (virtual anchor)
+    // Layer 3 — IMU / DeviceOrientation fusion (hold on loss)
+    //
+    // NOTE: All window.THREE objects are created INSIDE startAR(),
+    // which only runs after getThreeLibs() has loaded THREE.
+    // Only plain-JS IMU state lives here at module scope.
     // ═══════════════════════════════════════════════════════════════
 
-    // IMU state — populated by DeviceOrientation listener
-    const _imuCur  = new window.THREE.Quaternion(); // live device orientation
-    let   _imuLock = null;   // snapshot at last stable anchor frame
-    let   _hasIMU  = false;
+    // IMU state — plain JS, safe to create at page load
+    let _imuCurArr = [0, 0, 0, 1]; // [x,y,z,w] — updated by deviceorientation
+    let _imuLockArr = null;         // snapshot at last stable anchor frame
+    let _hasIMU = false;
 
-    // Request iOS 13+ permission then attach listener
+    // Start listening for device orientation immediately (no THREE needed)
     (async () => {
       if (typeof DeviceOrientationEvent !== 'undefined' &&
           typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -841,33 +844,21 @@
       }
       window.addEventListener('deviceorientation', (e) => {
         _hasIMU = true;
-        // W3C DeviceOrientation → Three.js quaternion (ZXY intrinsic Euler)
-        const eu = new window.THREE.Euler(
-          window.THREE.MathUtils.degToRad(e.beta  || 0),
-          window.THREE.MathUtils.degToRad(e.alpha || 0),
-         -window.THREE.MathUtils.degToRad(e.gamma || 0),
-          'YXZ'
-        );
-        _imuCur.setFromEuler(eu);
+        // Store as plain numbers; convert to THREE.Quaternion inside the loop
+        _imuCurArr = [e.alpha || 0, e.beta || 0, e.gamma || 0];
       }, { passive: true });
     })();
 
-    // EMA smoother state — layer 2
-    const _sPos  = new window.THREE.Vector3();
-    const _sQuat = new window.THREE.Quaternion();
-    let   _poseReady = false;
-    const POS_A = 0.14;  // position lerp alpha  (lower = smoother)
-    const ROT_A = 0.12;  // rotation slerp alpha
-
-    // virtualAnchor — the model's actual parent; we drive it manually
-    // so MindAR's raw jitter never reaches the model directly.
-    const virtualAnchor = new window.THREE.Group();
-    scene.add(virtualAnchor);
-
-    // Corrective sub-group: +90° around X so model stands upright on card
-    const correctGroup = new window.THREE.Group();
-    correctGroup.rotation.x = Math.PI / 2;
-    virtualAnchor.add(correctGroup);
+    // THREE-dependent pipeline state — populated inside startAR()
+    let _imuCur     = null;  // THREE.Quaternion — live device orientation
+    let _imuLock    = null;  // THREE.Quaternion — snapshot at lock
+    let _sPos       = null;  // THREE.Vector3    — smoothed position
+    let _sQuat      = null;  // THREE.Quaternion — smoothed rotation
+    let _poseReady  = false;
+    let virtualAnchor = null;  // THREE.Group — model's actual parent
+    let correctGroup  = null;  // THREE.Group — upright correction
+    const POS_A = 0.14;
+    const ROT_A = 0.12;
 
     async function startAR() {
       console.log('[AR] Starting MindAR...');
@@ -882,13 +873,10 @@
           uiLoading: 'no',
           uiScanning: 'no',
           uiError: 'no',
-          // Layer 1: Tuned One-Euro filter
-          // filterMinCF low  → heavy low-pass → smooth at rest
-          // filterBeta  low  → slow speed adaptation → stable depth
           filterMinCF:      0.0001,
           filterBeta:       0.0001,
-          warmupTolerance:  3,    // acquire quickly
-          missTolerance:    120,  // hold tracking through brief occlusions
+          warmupTolerance:  3,
+          missTolerance:    120,
         });
 
         renderer = mindarThree.renderer;
@@ -901,6 +889,28 @@
         dl.position.set(1, 3, 2); scene.add(dl);
         const fl = new window.THREE.DirectionalLight(0xd4a853, 0.8);
         fl.position.set(-2, 1, -1); scene.add(fl);
+
+        // Init THREE-dependent pipeline objects (THREE is guaranteed loaded here)
+        _imuCur       = new window.THREE.Quaternion();
+        _sPos         = new window.THREE.Vector3();
+        _sQuat        = new window.THREE.Quaternion();
+        virtualAnchor = new window.THREE.Group();
+        scene.add(virtualAnchor);
+        correctGroup  = new window.THREE.Group();
+        correctGroup.rotation.x = Math.PI / 2;
+        virtualAnchor.add(correctGroup);
+
+        // Converts raw DeviceOrientation numbers → THREE.Quaternion each frame
+        function syncIMU() {
+          if (!_hasIMU || !_imuCur) return;
+          const [alpha, beta, gamma] = _imuCurArr;
+          _imuCur.setFromEuler(new window.THREE.Euler(
+            window.THREE.MathUtils.degToRad(beta),
+            window.THREE.MathUtils.degToRad(alpha),
+           -window.THREE.MathUtils.degToRad(gamma),
+            'YXZ'
+          ));
+        }
 
         // Single anchor (index 0) — one target image
         const anchor = mindarThree.addAnchor(0);
@@ -946,6 +956,7 @@
         const _rawS = new window.THREE.Vector3();
 
         renderer.setAnimationLoop(() => {
+          syncIMU(); // keep _imuCur in sync with latest gyro reading
 
           if (anchor.group.visible) {
             // ── Layer 2: read raw pose, apply EMA ──────────────────
@@ -996,19 +1007,15 @@
         console.log('[AR] MindAR initialized, calling start()...');
         await mindarThree.start();
         console.log('[AR] MindAR started successfully ✓');
-        
-        // Update UI to show the camera feed clearly for scanning
-        const overlay = document.getElementById('scan-overlay');
-        overlay.classList.add('scanning-mode');
-        const btn = document.getElementById('start-ar-btn');
-        btn.style.display = 'none';
-        const initStatus = document.getElementById('ar-init-status');
-        if (initStatus) initStatus.textContent = 'Point camera at the menu card to scan';
+
+        document.getElementById('scan-overlay').classList.add('scanning-mode');
+        document.getElementById('start-ar-btn').style.display = 'none';
+        const initStatus2 = document.getElementById('ar-init-status');
+        if (initStatus2) initStatus2.textContent = 'Point camera at the menu card to scan';
 
       } catch (err) {
         console.error('[AR] MindAR failed:', err.message, err);
-        alert('AR Camera Failed: ' + err.message + '\n\nFalling back to Demo Mode. Check browser camera permissions.');
-        anchor = null;
+        alert('AR Camera Failed: ' + err.message + '\n\nFalling back to Demo Mode.');
         showDemoMode();
       }
     }
@@ -1199,7 +1206,7 @@
     // ─────────────────────────────────────────────
     // HANDLE START BUTTON — user gesture required for camera on mobile
     // ─────────────────────────────────────────────
-    let arStarted = false;
+    // arStarted is declared above (before pipeline block) — do not re-declare
 
     async function handleStartAR() {
       if (arStarted) return;
