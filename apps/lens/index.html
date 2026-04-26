@@ -696,6 +696,9 @@
 
     function clearArModel() {
       if (arModel) {
+        // Remove from the virtual anchor's corrective sub-group
+        if (typeof correctGroup !== 'undefined') correctGroup.remove(arModel);
+        // Also clean up any legacy attachment points
         anchors.forEach(a => {
           a.group.remove(arModel);
           if (a.innerGroup) a.innerGroup.remove(arModel);
@@ -739,8 +742,8 @@
           arModel.userData.baseY = baseY;
           arModel.position.set(-center.x * scale, baseY, -center.z * scale);
 
-          // If an anchor is already found, attach it immediately
-          if (activeAnchor) activeAnchor.innerGroup.add(arModel);
+          // Attach to the EMA virtual anchor's corrective sub-group
+          if (typeof correctGroup !== 'undefined') correctGroup.add(arModel);
 
           // Show rotation hint
           arHint.classList.add('visible');
@@ -812,12 +815,65 @@
       }
     };
 
+    // ═══════════════════════════════════════════════════════════════
+    // PROFESSIONAL AR STABILIZATION PIPELINE
+    //
+    // Layer 1 — MindAR with heavily tuned One-Euro filter
+    //   ↓  Raw pose (position + quaternion) from image detection
+    // Layer 2 — Application-level EMA smoother
+    //   ↓  Smoothed pose applied to a virtual anchor in scene
+    // Layer 3 — IMU / DeviceOrientation fusion
+    //   ↓  When marker is lost, gyro delta rotates the held pose
+    //      so the model stays in world space (not camera space)
+    // ═══════════════════════════════════════════════════════════════
+
+    // IMU state — populated by DeviceOrientation listener
+    const _imuCur  = new window.THREE.Quaternion(); // live device orientation
+    let   _imuLock = null;   // snapshot at last stable anchor frame
+    let   _hasIMU  = false;
+
+    // Request iOS 13+ permission then attach listener
+    (async () => {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const p = await DeviceOrientationEvent.requestPermission().catch(() => 'denied');
+        if (p !== 'granted') return;
+      }
+      window.addEventListener('deviceorientation', (e) => {
+        _hasIMU = true;
+        // W3C DeviceOrientation → Three.js quaternion (ZXY intrinsic Euler)
+        const eu = new window.THREE.Euler(
+          window.THREE.MathUtils.degToRad(e.beta  || 0),
+          window.THREE.MathUtils.degToRad(e.alpha || 0),
+         -window.THREE.MathUtils.degToRad(e.gamma || 0),
+          'YXZ'
+        );
+        _imuCur.setFromEuler(eu);
+      }, { passive: true });
+    })();
+
+    // EMA smoother state — layer 2
+    const _sPos  = new window.THREE.Vector3();
+    const _sQuat = new window.THREE.Quaternion();
+    let   _poseReady = false;
+    const POS_A = 0.14;  // position lerp alpha  (lower = smoother)
+    const ROT_A = 0.12;  // rotation slerp alpha
+
+    // virtualAnchor — the model's actual parent; we drive it manually
+    // so MindAR's raw jitter never reaches the model directly.
+    const virtualAnchor = new window.THREE.Group();
+    scene.add(virtualAnchor);
+
+    // Corrective sub-group: +90° around X so model stands upright on card
+    const correctGroup = new window.THREE.Group();
+    correctGroup.rotation.x = Math.PI / 2;
+    virtualAnchor.add(correctGroup);
+
     async function startAR() {
       console.log('[AR] Starting MindAR...');
       const initStatus = document.getElementById('ar-init-status');
       if (initStatus) initStatus.textContent = 'Requesting camera access…';
 
-      // Init MindAR
       try {
         mindarThree = new window.MINDAR.IMAGE.MindARThree({
           container: document.getElementById('ar-container'),
@@ -826,10 +882,13 @@
           uiLoading: 'no',
           uiScanning: 'no',
           uiError: 'no',
-          filterMinCF: 0.00001,
-          filterBeta:  0.01,    
-          warmupTolerance: 12,
-          missTolerance: 30,     // Doubled to keep lock at steep angles
+          // Layer 1: Tuned One-Euro filter
+          // filterMinCF low  → heavy low-pass → smooth at rest
+          // filterBeta  low  → slow speed adaptation → stable depth
+          filterMinCF:      0.0001,
+          filterBeta:       0.0001,
+          warmupTolerance:  3,    // acquire quickly
+          missTolerance:    120,  // hold tracking through brief occlusions
         });
 
         renderer = mindarThree.renderer;
@@ -843,60 +902,94 @@
         const fl = new window.THREE.DirectionalLight(0xd4a853, 0.8);
         fl.position.set(-2, 1, -1); scene.add(fl);
 
-        // Instantiate 5 anchors for multi-perspective tracking
-        for (let i = 0; i < 5; i++) {
-          const a = mindarThree.addAnchor(i);
+        // Single anchor (index 0) — one target image
+        const anchor = mindarThree.addAnchor(0);
+        anchors.push(anchor);
 
-          // innerGroup holds the corrective rotation so the model stands upright
-          // on the card surface. MindAR drives the parent group's pose naturally,
-          // so the model will tilt/rotate with the camera like a real object.
-          a.innerGroup = new window.THREE.Group();
-          // MindAR's target plane has Z pointing out; rotate +90° around X so
-          // the model's Y-up aligns with the card's outward normal.
-          a.innerGroup.rotation.x = Math.PI / 2;
-          a.group.add(a.innerGroup);
+        let _isHolding = false;
 
-          a.onTargetFound = () => {
-            activeAnchor = a;
-            anchorFound = true;
-            scanOverlay.classList.add('hidden');
-            menuPanel.classList.add('visible');
-            menuPanel.classList.remove('minimized');
-            anchorStatus.classList.add('found');
-            statusText.textContent = 'Anchor locked';
+        anchor.onTargetFound = () => {
+          activeAnchor = anchor;
+          anchorFound  = true;
+          _isHolding   = false;
+          scanOverlay.classList.add('hidden');
+          menuPanel.classList.add('visible');
+          menuPanel.classList.remove('minimized');
+          anchorStatus.classList.add('found');
+          statusText.textContent = 'Anchor locked';
 
-            if (activeDishId) {
-              const dish = MENU.find(d => d.id === activeDishId);
-              if (dish?.model && !arModel) {
-                loadArModel(dish.model);
-              } else if (arModel) {
-                a.innerGroup.add(arModel);
-              }
+          // Attach model to correctGroup (inside virtualAnchor)
+          if (activeDishId) {
+            const dish = MENU.find(d => d.id === activeDishId);
+            if (dish?.model && !arModel) {
+              loadArModel(dish.model);
+            } else if (arModel) {
+              correctGroup.add(arModel);
             }
-          };
+          }
+        };
 
-          a.onTargetLost = () => {
-            if (activeAnchor === a) {
-              activeAnchor = null;
-              anchorFound = false;
-              anchorStatus.classList.remove('found');
-              statusText.textContent = 'Scanning…';
-              clearArModel();
-            }
-          };
+        anchor.onTargetLost = () => {
+          activeAnchor = null;
+          anchorFound  = false;
+          _isHolding   = true;
+          // Snapshot IMU so hold-mode can compute delta
+          if (_hasIMU) _imuLock = _imuCur.clone();
+          anchorStatus.classList.remove('found');
+          statusText.textContent = 'Holding…';
+          // DO NOT clear the model — keep it visible in hold mode
+        };
 
-          anchors.push(a);
-        }
+        // ─── Animation loop ─────────────────────────────────────────
+        const _rawP = new window.THREE.Vector3();
+        const _rawQ = new window.THREE.Quaternion();
+        const _rawS = new window.THREE.Vector3();
 
-        // AR animation loop — no quaternion overrides; MindAR drives
-        // the anchor group's pose naturally so the model tracks the card
-        // from any camera angle/orientation like a real physical object.
         renderer.setAnimationLoop(() => {
+
+          if (anchor.group.visible) {
+            // ── Layer 2: read raw pose, apply EMA ──────────────────
+            anchor.group.updateMatrixWorld(true);
+            anchor.group.matrixWorld.decompose(_rawP, _rawQ, _rawS);
+
+            if (!_poseReady) {
+              _sPos.copy(_rawP);
+              _sQuat.copy(_rawQ);
+              _poseReady = true;
+            } else {
+              _sPos.lerp(_rawP,   POS_A);
+              _sQuat.slerp(_rawQ, ROT_A);
+            }
+
+            // Drive virtualAnchor with smoothed pose
+            virtualAnchor.position.copy(_sPos);
+            virtualAnchor.quaternion.copy(_sQuat);
+
+            // Refresh IMU lock every frame while anchor is visible
+            if (_hasIMU) _imuLock = _imuCur.clone();
+            _isHolding = false;
+
+          } else if (_isHolding && _poseReady) {
+            // ── Layer 3: IMU hold ───────────────────────────────────
+            // When anchor is lost, rotate the held position by the
+            // inverse of the IMU delta so the model appears to stay
+            // fixed in world space as the camera moves.
+            if (_hasIMU && _imuLock) {
+              // dQ = rotation device has made since anchor was last seen
+              const dQ = _imuLock.clone().invert().premultiply(_imuCur.clone());
+              // Counter-rotate held world position (camera is at origin in MindAR)
+              virtualAnchor.position.copy(_sPos).applyQuaternion(dQ.clone().invert());
+              virtualAnchor.quaternion.copy(_sQuat).premultiply(dQ.clone().invert());
+            }
+            // If no IMU, virtualAnchor just stays frozen at last pose — still better than floating
+          }
+
+          // Subtle float on the model
           if (arModel && arModel.userData.baseY !== undefined) {
             const t = clock.getElapsedTime();
-            // Subtle float — 6mm max, no auto-spin
             arModel.position.y = arModel.userData.baseY + Math.sin(t * 1.2) * 0.006;
           }
+
           mindarThree.renderer.render(scene, camera);
         });
 
