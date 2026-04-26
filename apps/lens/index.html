@@ -696,9 +696,7 @@
 
     function clearArModel() {
       if (arModel) {
-        // Remove from the virtual anchor's corrective sub-group
-        if (typeof correctGroup !== 'undefined') correctGroup.remove(arModel);
-        // Also clean up any legacy attachment points
+        if (correctGroup) correctGroup.remove(arModel);
         anchors.forEach(a => {
           a.group.remove(arModel);
           if (a.innerGroup) a.innerGroup.remove(arModel);
@@ -743,7 +741,7 @@
           arModel.position.set(-center.x * scale, baseY, -center.z * scale);
 
           // Attach to the EMA virtual anchor's corrective sub-group
-          if (typeof correctGroup !== 'undefined') correctGroup.add(arModel);
+          if (correctGroup) correctGroup.add(arModel);
 
           // Show rotation hint
           arHint.classList.add('visible');
@@ -834,9 +832,11 @@
     let _imuCurArr = [0, 0, 0, 1]; // [x,y,z,w] — updated by deviceorientation
     let _imuLockArr = null;         // snapshot at last stable anchor frame
     let _hasIMU = false;
+    let gyroRate = 0;               // magnitude of angular velocity (rad/s) from DeviceMotion
 
-    // Start listening for device orientation immediately (no THREE needed)
+    // Request DeviceOrientation + DeviceMotion permissions (iOS 13+) and start listening
     (async () => {
+      // DeviceOrientation
       if (typeof DeviceOrientationEvent !== 'undefined' &&
           typeof DeviceOrientationEvent.requestPermission === 'function') {
         const p = await DeviceOrientationEvent.requestPermission().catch(() => 'denied');
@@ -844,8 +844,23 @@
       }
       window.addEventListener('deviceorientation', (e) => {
         _hasIMU = true;
-        // Store as plain numbers; convert to THREE.Quaternion inside the loop
         _imuCurArr = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      }, { passive: true });
+
+      // DeviceMotion — gyroscope angular velocity for adaptive EMA
+      if (typeof DeviceMotionEvent !== 'undefined' &&
+          typeof DeviceMotionEvent.requestPermission === 'function') {
+        const p = await DeviceMotionEvent.requestPermission().catch(() => 'denied');
+        if (p !== 'granted') return;
+      }
+      window.addEventListener('devicemotion', (e) => {
+        const r = e.rotationRate;
+        if (r) {
+          const ax = (r.alpha || 0) * Math.PI / 180;
+          const bx = (r.beta  || 0) * Math.PI / 180;
+          const gx = (r.gamma || 0) * Math.PI / 180;
+          gyroRate = Math.sqrt(ax*ax + bx*bx + gx*gx);
+        }
       }, { passive: true });
     })();
 
@@ -897,7 +912,7 @@
         virtualAnchor = new window.THREE.Group();
         scene.add(virtualAnchor);
         correctGroup  = new window.THREE.Group();
-        correctGroup.rotation.x = Math.PI / 2;
+        // No static rotation hack — quaternion inversion handles upright correction per-frame
         virtualAnchor.add(correctGroup);
 
         // Converts raw DeviceOrientation numbers → THREE.Quaternion each frame
@@ -912,43 +927,48 @@
           ));
         }
 
-        // Single anchor (index 0) — one target image
-        const anchor = mindarThree.addAnchor(0);
-        anchors.push(anchor);
-
+        // ─── 5 anchors (one per compiled perspective warp) ──────────
         let _isHolding = false;
+        let _activeAnchorGroup = null; // which anchor group is currently driving pose
 
-        anchor.onTargetFound = () => {
-          activeAnchor = anchor;
-          anchorFound  = true;
-          _isHolding   = false;
-          scanOverlay.classList.add('hidden');
-          menuPanel.classList.add('visible');
-          menuPanel.classList.remove('minimized');
-          anchorStatus.classList.add('found');
-          statusText.textContent = 'Anchor locked';
+        for (let i = 0; i < 5; i++) {
+          const a = mindarThree.addAnchor(i);
+          anchors.push(a);
 
-          // Attach model to correctGroup (inside virtualAnchor)
-          if (activeDishId) {
-            const dish = MENU.find(d => d.id === activeDishId);
-            if (dish?.model && !arModel) {
-              loadArModel(dish.model);
-            } else if (arModel) {
-              correctGroup.add(arModel);
+          a.onTargetFound = () => {
+            _activeAnchorGroup = a.group;
+            activeAnchor = a;
+            anchorFound  = true;
+            _isHolding   = false;
+            scanOverlay.classList.add('hidden');
+            menuPanel.classList.add('visible');
+            menuPanel.classList.remove('minimized');
+            anchorStatus.classList.add('found');
+            statusText.textContent = 'Anchor locked';
+
+            if (activeDishId) {
+              const dish = MENU.find(d => d.id === activeDishId);
+              if (dish?.model && !arModel) {
+                loadArModel(dish.model);
+              } else if (arModel) {
+                correctGroup.add(arModel);
+              }
             }
-          }
-        };
+          };
 
-        anchor.onTargetLost = () => {
-          activeAnchor = null;
-          anchorFound  = false;
-          _isHolding   = true;
-          // Snapshot IMU so hold-mode can compute delta
-          if (_hasIMU) _imuLock = _imuCur.clone();
-          anchorStatus.classList.remove('found');
-          statusText.textContent = 'Holding…';
-          // DO NOT clear the model — keep it visible in hold mode
-        };
+          a.onTargetLost = () => {
+            // Only trigger hold/lost when the currently active anchor is lost
+            if (_activeAnchorGroup !== a.group) return;
+            _activeAnchorGroup = null;
+            activeAnchor = null;
+            anchorFound  = false;
+            _isHolding   = true;
+            if (_hasIMU) _imuLock = _imuCur.clone();
+            anchorStatus.classList.remove('found');
+            statusText.textContent = 'Holding…';
+            clearArModel();
+          };
+        }
 
         // ─── Animation loop ─────────────────────────────────────────
         const _rawP = new window.THREE.Vector3();
@@ -958,41 +978,49 @@
         renderer.setAnimationLoop(() => {
           syncIMU(); // keep _imuCur in sync with latest gyro reading
 
-          if (anchor.group.visible) {
-            // ── Layer 2: read raw pose, apply EMA ──────────────────
-            anchor.group.updateMatrixWorld(true);
-            anchor.group.matrixWorld.decompose(_rawP, _rawQ, _rawS);
+          // Adaptive EMA alpha — more smoothing when device is steady
+          const speed = Math.min(gyroRate, 5); // cap at 5 rad/s
+          const posA = POS_A + speed * 0.04;
+          const rotA = ROT_A + speed * 0.04;
+
+          // Find the first visible anchor to drive the virtual anchor pose
+          const visibleAnchor = anchors.find(a => a.group.visible);
+
+          if (visibleAnchor) {
+            // ── Layer 2: read raw pose, apply adaptive EMA ──────────
+            visibleAnchor.group.updateMatrixWorld(true);
+            visibleAnchor.group.matrixWorld.decompose(_rawP, _rawQ, _rawS);
 
             if (!_poseReady) {
               _sPos.copy(_rawP);
               _sQuat.copy(_rawQ);
               _poseReady = true;
             } else {
-              _sPos.lerp(_rawP,   POS_A);
-              _sQuat.slerp(_rawQ, ROT_A);
+              _sPos.lerp(_rawP,   posA);
+              _sQuat.slerp(_rawQ, rotA);
             }
 
             // Drive virtualAnchor with smoothed pose
             virtualAnchor.position.copy(_sPos);
             virtualAnchor.quaternion.copy(_sQuat);
 
+            // ── Per-frame upright correction ─────────────────────────
+            // Invert the anchor's world rotation so model stays world-aligned (upright)
+            correctGroup.quaternion.copy(_sQuat).invert();
+
             // Refresh IMU lock every frame while anchor is visible
             if (_hasIMU) _imuLock = _imuCur.clone();
             _isHolding = false;
 
           } else if (_isHolding && _poseReady) {
-            // ── Layer 3: IMU hold ───────────────────────────────────
-            // When anchor is lost, rotate the held position by the
-            // inverse of the IMU delta so the model appears to stay
-            // fixed in world space as the camera moves.
+            // ── Layer 3: IMU hold ─────────────────────────────────────
             if (_hasIMU && _imuLock) {
-              // dQ = rotation device has made since anchor was last seen
               const dQ = _imuLock.clone().invert().premultiply(_imuCur.clone());
-              // Counter-rotate held world position (camera is at origin in MindAR)
               virtualAnchor.position.copy(_sPos).applyQuaternion(dQ.clone().invert());
               virtualAnchor.quaternion.copy(_sQuat).premultiply(dQ.clone().invert());
+              // Keep correction in sync during hold
+              correctGroup.quaternion.copy(virtualAnchor.quaternion).invert();
             }
-            // If no IMU, virtualAnchor just stays frozen at last pose — still better than floating
           }
 
           // Subtle float on the model
