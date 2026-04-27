@@ -835,31 +835,6 @@
     // arStarted declared here (before any async IIFE) to avoid TDZ errors
     let arStarted = false;
 
-    // ─── Real-world "up" from accelerometer ──────────────────────────────────
-    // accelerationIncludingGravity in device space (X=right, Y=up-on-screen, Z=out-of-screen).
-    // Gravity pulls DOWN, so the static component is approximately:
-    //   ax=0, ay=-9.8, az=0  when phone is upright
-    //   ax=0, ay=0,  az=+9.8 when phone is flat face-up (camera pointing down)
-    // "Real-world up" = -(gravity vector) = -accelerationIncludingGravity (normalised)
-    // We expose this as _gravityUp (in camera/device space) for the lookAt call each frame.
-    let _gravityUp = { x: 0, y: 1, z: 0 }; // safe default = screen-up when unknown
-
-    (async () => {
-      // iOS 13+ requires explicit permission for DeviceMotion
-      if (typeof DeviceMotionEvent !== 'undefined' &&
-          typeof DeviceMotionEvent.requestPermission === 'function') {
-        const p = await DeviceMotionEvent.requestPermission().catch(() => 'denied');
-        if (p !== 'granted') return;
-      }
-      window.addEventListener('devicemotion', (e) => {
-        const g = e.accelerationIncludingGravity;
-        if (!g) return;
-        const mag = Math.sqrt(g.x*g.x + g.y*g.y + g.z*g.z);
-        if (mag < 0.5) return; // ignore near-zero readings
-        // Negate because gravity points DOWN; we want UP
-        _gravityUp = { x: -g.x/mag, y: -g.y/mag, z: -g.z/mag };
-      }, { passive: true });
-    })();
 
     async function startAR() {
       console.log('[AR] Starting MindAR...');
@@ -938,18 +913,10 @@
         if (anchors.length === 0) throw new Error('No valid targets in mind file');
 
         // ─── Animation loop ─────────────────────────────────────────
-        const _camPos   = new window.THREE.Vector3(0, 0, 0);
-        const _upVec    = new window.THREE.Vector3(0, 1, 0);
-
         renderer.setAnimationLoop(() => {
-          // Use real-world "up" from accelerometer so the model stands upright
-          // regardless of how the phone is tilted (overhead, eye-level, etc.)
-          _upVec.set(_gravityUp.x, _gravityUp.y, _gravityUp.z);
-
           anchors.forEach(a => {
             if (a.group.visible && a.innerGroup) {
-              a.innerGroup.up.copy(_upVec);   // gravity-corrected up
-              a.innerGroup.lookAt(_camPos);   // face the camera
+              a.innerGroup.rotation.x = Math.PI / 2;
             }
           });
 
