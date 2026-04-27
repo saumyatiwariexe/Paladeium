@@ -849,10 +849,10 @@
           uiLoading: 'no',
           uiScanning: 'no',
           uiError: 'no',
-          filterMinCF:  0.00001,
-          filterBeta:   0.01,
-          warmupTolerance: 12,
-          missTolerance:   30,
+          filterMinCF:  0.001,
+          filterBeta:   1000,
+          warmupTolerance: 5,
+          missTolerance:   10,
         });
 
         renderer = mindarThree.renderer;
@@ -892,10 +892,15 @@
 
             if (activeDishId) {
               const dish = MENU.find(d => d.id === activeDishId);
-              if (dish?.model && !arModel) {
-                loadArModel(dish.model);
-              } else if (arModel) {
-                a.innerGroup.add(arModel);
+              if (dish?.model) {
+                if (arModel) {
+                  // Re-attach existing model — no refetch needed
+                  if (!a.innerGroup.children.includes(arModel)) {
+                    a.innerGroup.add(arModel);
+                  }
+                } else {
+                  loadArModel(dish.model);
+                }
               }
             }
           };
@@ -906,7 +911,8 @@
             anchorFound  = false;
             anchorStatus.classList.remove('found');
             statusText.textContent = 'Scanning…';
-            clearArModel();
+            // Don't clear arModel — MindAR hides a.group automatically.
+            // Keeping the model loaded means instant re-display on re-detect.
           };
         }
 
