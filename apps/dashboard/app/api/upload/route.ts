@@ -12,7 +12,9 @@ export async function POST(req: NextRequest) {
     const { put } = await import('@vercel/blob')
     const form = await req.formData()
     const file = form.get('file') as File | null
-    const name = (form.get('name') as string | null) || file?.name || 'upload'
+    const restaurantId = (form.get('restaurantId') as string | null) ?? 'shared'
+    const rawName = (form.get('name') as string | null) || file?.name || 'upload'
+    const blobPath = `models/${restaurantId}/${rawName}`
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
@@ -21,7 +23,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File too large — max 15 MB' }, { status: 413 })
     }
 
-    const blob = await put(name, file, { access: 'public' })
+    const blob = await put(blobPath, file, { access: 'public' })
     return NextResponse.json({ url: blob.url })
   } catch (err) {
     console.error('[upload]', err)

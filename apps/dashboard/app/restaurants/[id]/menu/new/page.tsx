@@ -267,7 +267,7 @@ export default function NewMenuItemPage() {
                 placeholder="burger.glb or https://cdn.example.com/model.glb"
                 className="w-full px-4 py-2.5 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 font-mono"
               />
-              <p className="text-white/25 text-[10px] mt-1">Local file (place in lens folder) or full URL. Under 5 MB.</p>
+              <p className="text-white/25 text-[10px] mt-1">Place GLB in <code className="font-mono">lens/models/{id}/</code> and enter the filename, or paste a full URL.</p>
             </div>
           )}
         </div>

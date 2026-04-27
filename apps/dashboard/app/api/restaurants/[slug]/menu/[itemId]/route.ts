@@ -15,7 +15,7 @@ const ItemUpdateSchema = z.object({
   dietaryTags: z.array(z.string().max(50)).max(10).optional(),
   available: z.boolean().optional(),
   imageUrl: z.string().max(500).optional(),
-}).strict()
+})
 
 export async function GET(_req: NextRequest, { params }: Params) {
   try {

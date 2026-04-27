@@ -26,7 +26,7 @@
       "price": 649,
       "emoji": "🍔",
       "imageUrl": "",
-      "modelUrl": "burger.glb",
+      "modelUrl": "models/demo-restaurant-1/burger.glb",
       "hasAr": true,
       "dietaryTags": ["non-veg"],
       "available": true,
