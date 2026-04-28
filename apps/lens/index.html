@@ -961,11 +961,9 @@
         import('three/addons/loaders/GLTFLoader.js')
       ]);
       
-      // Create a mutable wrapper for THREE
+      // Copy exports from the module namespace (Object.keys is safe for namespace objects)
       const threeWrapper = {};
-      for (const key in THREE) {
-        try { threeWrapper[key] = THREE[key]; } catch(e) {}
-      }
+      Object.keys(THREE).forEach(k => { try { threeWrapper[k] = THREE[k]; } catch(e) {} });
       threeWrapper.GLTFLoader = GLTFLoader;
       window.THREE = threeWrapper;
       return window.THREE;
