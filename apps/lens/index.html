@@ -10,7 +10,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
 
   <!-- ES Module Shims: Polyfill for import maps in older browsers (e.g. iOS < 16.4) -->
-  <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+  <!-- NOTE: Must NOT have `async` — the shim must execute before any import() calls -->
+  <script src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
 
   <!-- Importmap for Three.js and MindAR -->
   <script type="importmap">
@@ -620,8 +621,9 @@
     // AR MODEL — clear / load
     // ─────────────────────────────────────────────────────────────────────────
     function clearArModel() {
-      if (arModel && trackingEngine) {
-        trackingEngine.innerGroup.remove(arModel);
+      if (arModel) {
+        if (trackingEngine) trackingEngine.innerGroup.remove(arModel);
+        else if (typeof demoScene !== 'undefined' && demoScene) demoScene.remove(arModel);
       }
       arModel = null;
     }
@@ -631,7 +633,7 @@
       modelLoading.classList.add('visible');
 
       if (!window.THREE?.GLTFLoader) {
-        console.error('[AR] GLTFLoader not ready');
+        console.error('[AR] GLTFLoader not ready — call getThreeLibs() first');
         modelLoading.classList.remove('visible');
         return;
       }
@@ -662,9 +664,12 @@
           // Flip 180° so the model faces the camera (GLTF +Z → towards viewer)
           arModel.rotation.y = Math.PI;
 
-          // Attach to the engine-managed group
+          // Attach to the engine-managed group and immediately make it visible
           if (trackingEngine) {
             trackingEngine.innerGroup.add(arModel);
+            // CRITICAL: force managedGroup visible right away so the model
+            // appears even if tick() hasn't run since the model loaded.
+            trackingEngine.managedGroup.visible = true;
           }
 
           if (uxController) uxController.showArHint();
@@ -675,7 +680,12 @@
 
           console.log('[AR] Model loaded ✓ scale=', scale.toFixed(4));
         },
-        undefined,
+        xhr => {
+          if (xhr.lengthComputable) {
+            const pct = Math.round(xhr.loaded / xhr.total * 100);
+            console.log(`[AR] Loading… ${pct}%`);
+          }
+        },
         err => {
           console.error('[AR] GLB load error:', err);
           modelLoading.classList.remove('visible');
@@ -968,12 +978,27 @@
     }
 
     function loadDemoModel(filename) {
+      // Guard: demoScene may not be initialised yet (e.g. called before
+      // setupDemoRenderer completes), or THREE may not be loaded yet.
+      if (!demoScene || !window.THREE?.GLTFLoader) {
+        if (filename) console.warn('[Demo] loadDemoModel called before renderer ready — queuing');
+        // Queue it: once setupDemoRenderer runs it will call loadDemoModel via the
+        // overridden selectDish, but if called directly we attempt a retry.
+        if (filename) {
+          setTimeout(() => {
+            if (demoScene && window.THREE?.GLTFLoader) loadDemoModel(filename);
+          }, 500);
+        }
+        return;
+      }
       if (demoModel) { demoScene.remove(demoModel); demoModel = null; }
-      if (!filename || !window.THREE?.GLTFLoader) return;
+      if (!filename) return;
 
+      const url = /^https?:\/\//.test(filename) ? filename : './' + filename;
+      console.log('[Demo] Loading model:', url);
       modelLoading.classList.add('visible');
       new window.THREE.GLTFLoader().load(
-        './' + filename,
+        url,
         gltf => {
           modelLoading.classList.remove('visible');
           demoModel = gltf.scene;
@@ -990,8 +1015,13 @@
           demoScene.add(demoModel);
           arHint.classList.add('visible');
           setTimeout(() => arHint.classList.remove('visible'), 4000);
+          console.log('[Demo] Model loaded ✓');
         },
-        undefined,
+        xhr => {
+          if (xhr.lengthComputable) {
+            console.log(`[Demo] Loading… ${Math.round(xhr.loaded / xhr.total * 100)}%`);
+          }
+        },
         err => {
           console.error('[Demo] GLB load error:', err);
           modelLoading.classList.remove('visible');
@@ -1033,11 +1063,18 @@
       status.textContent = 'Loading AR libraries…';
       try {
         await getThreeLibs();
-        const { MindARThree } = await import('mindar-image-three');
+        // MindAR may export MindARThree as a named export OR as a default export
+        const mindARModule = await import('mindar-image-three');
+        const MindARThree = mindARModule.MindARThree
+          || mindARModule.default?.MindARThree
+          || mindARModule.default;
+        if (!MindARThree) throw new Error('MindARThree constructor not found in module');
         if (!window.MINDAR)       window.MINDAR       = {};
         if (!window.MINDAR.IMAGE) window.MINDAR.IMAGE = {};
         window.MINDAR.IMAGE.MindARThree = MindARThree;
+        console.log('[AR] MindARThree loaded ✓');
       } catch (err) {
+        console.error('[AR] Failed to load AR libraries:', err);
         alert('Failed to load AR libraries: ' + err.message + '\n\nFalling back to preview mode.');
         showDemoMode();
         return;
