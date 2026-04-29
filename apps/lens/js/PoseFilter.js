@@ -92,10 +92,10 @@ export class PoseFilter {
    * @param {number} opts.rotBeta      – rotation speed coefficient   (default 0.003)
    */
   constructor({
-    posMinCutoff = 0.5,
-    posBeta      = 0.005,
-    rotMinCutoff = 0.5,
-    rotBeta      = 0.003,
+    posMinCutoff = 5.0,
+    posBeta      = 20.0,
+    rotMinCutoff = 3.0,
+    rotBeta      = 10.0,
   } = {}) {
     this.#px = new ScalarOneEuro(posMinCutoff, posBeta);
     this.#py = new ScalarOneEuro(posMinCutoff, posBeta);

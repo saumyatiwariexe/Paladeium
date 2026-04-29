@@ -19,6 +19,7 @@
 import * as THREE                                   from 'three';
 import { CapabilityDetector, CapabilityTier }       from './CapabilityDetector.js';
 import { TrackingState, TrackingStateMachine }      from './StateMachine.js';
+import { PoseFilter }                               from './PoseFilter.js';
 import { SensorFusion }                             from './SensorFusion.js';
 import { AnchorManager }                            from './AnchorManager.js';
 
@@ -28,8 +29,8 @@ export { TrackingState };           // re-export for convenience
 const ACQUIRE_FRAMES = 6;
 
 // Timing thresholds for automatic state progression
-const PREDICT_TO_RELOC_MS  = 2500;
-const RELOC_TO_DEGRADED_MS = 8000;
+const PREDICT_TO_RELOC_MS  = 800;
+const RELOC_TO_DEGRADED_MS = 5000;
 const DEGRADED_RESET_MS    = 3500;
 
 // Scratch objects — reused every frame to avoid GC pressure
@@ -44,6 +45,7 @@ export class TrackingEngine {
 
   // Internals
   #sm            = new TrackingStateMachine();
+  #filter        = new PoseFilter();
   #sensors       = new SensorFusion();
   #anchor        = new AnchorManager();
   #capabilities  = null;
@@ -133,8 +135,10 @@ export class TrackingEngine {
 
     // Re-entering from a loss state — go straight to LOCKED.
     if (prev === TrackingState.PREDICTED || prev === TrackingState.RELOCALIZING) {
+      this.#filter.reset();
       this.#sm.transition(TrackingState.LOCKED, 'reacquired');
     } else {
+      this.#filter.reset();
       this.#sm.force(TrackingState.ACQUIRING, 'target_found');
     }
 
@@ -162,6 +166,7 @@ export class TrackingEngine {
     }
     if (s === TrackingState.DEGRADED     && ms > DEGRADED_RESET_MS)    {
       this.#anchor.reset();
+      this.#filter.reset();
       this.#sm.transition(TrackingState.SEARCHING, 'degraded_reset');
     }
   }
@@ -183,12 +188,15 @@ export class TrackingEngine {
       // ── Marker is currently detected ─────────────────────────────────────
       anchor.group.matrixWorld.decompose(_rawPos, _rawQuat, _rawScale);
 
-      // Trust MindAR's native One Euro Filter output directly — no secondary pass
-      this.managedGroup.position.copy(_rawPos);
-      this.managedGroup.quaternion.copy(_rawQuat);
+      // Light secondary filter (5 Hz cutoff) to kill residual frame jitter
+      // without adding perceptible lag. MindAR's own filter handles large jumps.
+      const { position, quaternion } = this.#filter.update(_rawPos, _rawQuat);
+
+      this.managedGroup.position.copy(position);
+      this.managedGroup.quaternion.copy(quaternion);
       this.managedGroup.scale.copy(_rawScale);
 
-      this.#anchor.commit(_rawPos, _rawQuat);
+      this.#anchor.commit(position, quaternion);
 
       // Apply world-facing rotation correction to innerGroup
       this.innerGroup.rotation.x = Math.PI / 2;

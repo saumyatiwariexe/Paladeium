@@ -8,8 +8,8 @@
 
 import * as THREE from 'three';
 
-const HOLD_MS = 2500;  // full confidence hold after marker loss
-const FADE_MS = 5500;  // point at which confidence reaches 0
+const HOLD_MS = 200;   // brief hold before fade begins
+const FADE_MS = 900;   // fully hidden 900 ms after marker loss
 
 // Scratch objects for prediction path
 const _invDelta = new THREE.Quaternion();
