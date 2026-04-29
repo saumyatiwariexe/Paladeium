@@ -25,9 +25,6 @@ import { AnchorManager }                            from './AnchorManager.js';
 
 export { TrackingState };           // re-export for convenience
 
-// Frames of stable detection required before transitioning ACQUIRING → LOCKED
-const ACQUIRE_FRAMES = 6;
-
 // Timing thresholds for automatic state progression
 const PREDICT_TO_RELOC_MS  = 800;
 const RELOC_TO_DEGRADED_MS = 5000;
@@ -53,7 +50,6 @@ export class TrackingEngine {
   #scene         = null;
   #mindARAnchors = [];
   #activeAnchor  = null;
-  #acquireFrames = 0;
 
   #stateListeners = [];
 
@@ -129,27 +125,19 @@ export class TrackingEngine {
   // ── MindAR callbacks ──────────────────────────────────────────────────────
 
   #onFound(anchor) {
-    const prev = this.#sm.state;
-    this.#activeAnchor  = anchor;
-    this.#acquireFrames = 0;
-
-    // Re-entering from a loss state — go straight to LOCKED.
-    if (prev === TrackingState.PREDICTED || prev === TrackingState.RELOCALIZING) {
-      this.#filter.reset();
-      this.#sm.transition(TrackingState.LOCKED, 'reacquired');
-    } else {
-      this.#filter.reset();
-      this.#sm.force(TrackingState.ACQUIRING, 'target_found');
-    }
-
+    this.#activeAnchor = anchor;
+    this.#filter.reset();
+    // MindAR's warmupTolerance:3 already guarantees 3 stable frames before
+    // this fires — go straight to LOCKED, no secondary acquire buffer needed.
+    this.#sm.force(TrackingState.LOCKED, 'target_found');
     this.#sensors.calibrate();
   }
 
   #onLost(anchor) {
     if (this.#activeAnchor !== anchor) return;
-
     this.#anchor.recordLoss();
-    this.#sm.transition(TrackingState.PREDICTED, 'target_lost');
+    // force() so loss is always handled regardless of current state
+    this.#sm.force(TrackingState.PREDICTED, 'target_lost');
   }
 
   // ── State machine progression ─────────────────────────────────────────────
@@ -202,14 +190,6 @@ export class TrackingEngine {
       this.innerGroup.rotation.x = Math.PI / 2;
 
       this.managedGroup.visible = this.innerGroup.children.length > 0;
-
-      // ACQUIRING → LOCKED once we've accumulated enough stable frames
-      if (state === TrackingState.ACQUIRING) {
-        this.#acquireFrames++;
-        if (this.#acquireFrames >= ACQUIRE_FRAMES) {
-          this.#sm.transition(TrackingState.LOCKED, 'stable');
-        }
-      }
 
       return { markerVisible: true, confidence: 1.0 };
     }
