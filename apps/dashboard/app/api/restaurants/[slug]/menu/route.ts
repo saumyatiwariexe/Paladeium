@@ -6,13 +6,6 @@ import type { LensMenuResponse } from '@/lib/types'
 
 type Params = { params: { slug: string } }
 
-const DimensionsSchema = z.object({
-  length: z.number().min(0),
-  breadth: z.number().min(0),
-  height: z.number().min(0),
-  unit: z.enum(['m', 'cm', 'in']),
-}).optional()
-
 const MenuItemSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100).trim(),
   description: z.string().max(500).optional().default(''),
@@ -26,7 +19,6 @@ const MenuItemSchema = z.object({
   dietaryTags: z.array(z.string().max(50)).max(10).optional().default([]),
   available: z.boolean().optional().default(true),
   imageUrl: z.string().max(500).optional().default(''),
-  dimensions: DimensionsSchema,
 })
 
 // GET /api/restaurants/[slug]/menu — public, consumed by AR Lens
@@ -56,7 +48,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
         cat: cat?.name.toLowerCase() ?? 'other',
         model: item.modelUrl || null,
         hasAR: item.hasAr,
-        dimensions: item.dimensions,
       }
     })
 
@@ -141,7 +132,6 @@ export async function POST(req: NextRequest, { params }: Params) {
       hasAr: data.hasAr,
       dietaryTags: data.dietaryTags,
       available: data.available,
-      dimensions: data.dimensions,
       createdAt: new Date().toISOString(),
     }
 

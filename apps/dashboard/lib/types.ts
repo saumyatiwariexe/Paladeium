@@ -20,13 +20,6 @@ export interface MenuCategory {
   sortOrder: number
 }
 
-export interface ModelDimensions {
-  length: number
-  breadth: number
-  height: number
-  unit: 'm' | 'cm' | 'in'
-}
-
 export interface MenuItem {
   id: string
   restaurantId: string
@@ -41,7 +34,6 @@ export interface MenuItem {
   dietaryTags: string[]
   available: boolean
   createdAt: string
-  dimensions?: ModelDimensions
 }
 
 export interface Database {
@@ -60,7 +52,6 @@ export interface LensMenuItem {
   cat: string
   model: string | null
   hasAR: boolean
-  dimensions?: ModelDimensions
 }
 
 export interface LensMenuResponse {

@@ -10,7 +10,6 @@ interface ItemData {
   name: string; description: string; price: string; emoji: string
   categoryId: string; newCategoryName: string; newCategoryEmoji: string
   modelUrl: string; hasAr: boolean; dietaryTags: string[]; available: boolean
-  dimensions?: { length: number; breadth: number; height: number; unit: 'm' | 'cm' | 'in' }
 }
 
 async function safeJson(res: Response) {
@@ -33,7 +32,6 @@ export default function NewMenuItemPage() {
     name: '', description: '', price: '', emoji: '',
     categoryId: '', newCategoryName: '', newCategoryEmoji: '',
     modelUrl: '', hasAr: false, dietaryTags: [], available: true,
-    dimensions: { length: 0, breadth: 0, height: 0, unit: 'cm' }
   })
 
   useEffect(() => {
@@ -52,14 +50,13 @@ export default function NewMenuItemPage() {
       fetch(`/api/restaurants/${id}/menu/${editId}`)
         .then(r => safeJson(r))
         .then((item: unknown) => {
-          const i = item as { name?: string; description?: string; price?: number; emoji?: string; categoryId?: string; modelUrl?: string; hasAr?: boolean; dietaryTags?: string[]; available?: boolean; dimensions?: any }
+          const i = item as { name?: string; description?: string; price?: number; emoji?: string; categoryId?: string; modelUrl?: string; hasAr?: boolean; dietaryTags?: string[]; available?: boolean }
           if (i?.name) {
             setForm(f => ({
               ...f,
               name: i.name!, description: i.description ?? '', price: String(i.price ?? ''),
               emoji: i.emoji ?? '', categoryId: i.categoryId ?? '', modelUrl: i.modelUrl ?? '',
               hasAr: i.hasAr ?? false, dietaryTags: i.dietaryTags ?? [], available: i.available ?? true,
-              dimensions: i.dimensions ?? { length: 0, breadth: 0, height: 0, unit: 'cm' }
             }))
           }
         })
@@ -94,7 +91,6 @@ export default function NewMenuItemPage() {
       hasAr: form.hasAr,
       dietaryTags: form.dietaryTags,
       available: form.available,
-      dimensions: form.hasAr ? form.dimensions : undefined,
     }
 
     try {
@@ -112,34 +108,6 @@ export default function NewMenuItemPage() {
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('slug', restaurantSlug)
-    formData.append('type', 'model')
-
-    setLoading(true)
-    setError('')
-    try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      })
-      const data = await safeJson(res) as { url?: string, error?: string }
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
-      if (data.url) {
-        setForm(f => ({ ...f, modelUrl: data.url! }))
-      }
-    } catch (err: any) {
-      setError(err.message || 'Upload error')
     } finally {
       setLoading(false)
     }
@@ -290,73 +258,16 @@ export default function NewMenuItemPage() {
             </button>
           </div>
           {form.hasAr && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-white/40 font-medium mb-1.5">3D Model File Upload</label>
-                <div className="flex gap-2">
-                  <input
-                    type="file"
-                    accept=".glb,.gltf"
-                    onChange={handleFileUpload}
-                    className="flex-1 px-4 py-2 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-[#D4A853] file:text-black cursor-pointer"
-                  />
-                </div>
-                <div className="mt-2">
-                  <label className="block text-xs text-white/40 font-medium mb-1.5">Or enter Model URL directly</label>
-                  <input
-                    type="text"
-                    value={form.modelUrl}
-                    onChange={e => setForm(f => ({ ...f, modelUrl: e.target.value }))}
-                    placeholder="https://... or models/restaurant/file.glb"
-                    className="w-full px-4 py-2.5 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 font-mono"
-                  />
-                  <p className="text-white/25 text-[10px] mt-1">Uploaded files are saved to <code className="font-mono">lens/models/{restaurantSlug}/</code></p>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-xs text-white/40 font-medium mb-1.5">Dimensions (Length x Breadth x Height)</label>
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={form.dimensions?.length || ''}
-                    onChange={e => setForm(f => ({ ...f, dimensions: { ...f.dimensions!, length: Number(e.target.value) } }))}
-                    placeholder="L"
-                    className="w-20 px-3 py-2 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white"
-                  />
-                  <span className="text-white/40 text-xs">x</span>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={form.dimensions?.breadth || ''}
-                    onChange={e => setForm(f => ({ ...f, dimensions: { ...f.dimensions!, breadth: Number(e.target.value) } }))}
-                    placeholder="B"
-                    className="w-20 px-3 py-2 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white"
-                  />
-                  <span className="text-white/40 text-xs">x</span>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={form.dimensions?.height || ''}
-                    onChange={e => setForm(f => ({ ...f, dimensions: { ...f.dimensions!, height: Number(e.target.value) } }))}
-                    placeholder="H"
-                    className="w-20 px-3 py-2 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white"
-                  />
-                  <select
-                    value={form.dimensions?.unit || 'cm'}
-                    onChange={e => setForm(f => ({ ...f, dimensions: { ...f.dimensions!, unit: e.target.value as 'm'|'cm'|'in' } }))}
-                    className="w-16 px-2 py-2 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white"
-                  >
-                    <option value="m">m</option>
-                    <option value="cm">cm</option>
-                    <option value="in">in</option>
-                  </select>
-                </div>
-              </div>
+            <div>
+              <label className="block text-xs text-white/40 font-medium mb-1.5">3D Model (GLB filename or URL)</label>
+              <input
+                type="text"
+                value={form.modelUrl}
+                onChange={e => setForm(f => ({ ...f, modelUrl: e.target.value }))}
+                placeholder="burger.glb or https://cdn.example.com/model.glb"
+                className="w-full px-4 py-2.5 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 font-mono"
+              />
+              <p className="text-white/25 text-[10px] mt-1">Place GLB in <code className="font-mono">lens/models/{id}/</code> and enter the filename, or paste a full URL.</p>
             </div>
           )}
         </div>

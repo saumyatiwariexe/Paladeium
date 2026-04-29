@@ -4,13 +4,6 @@ import { readDb, writeDb } from '@/lib/db'
 
 type Params = { params: { slug: string; itemId: string } }
 
-const DimensionsSchema = z.object({
-  length: z.number().min(0),
-  breadth: z.number().min(0),
-  height: z.number().min(0),
-  unit: z.enum(['m', 'cm', 'in']),
-}).optional()
-
 const ItemUpdateSchema = z.object({
   name: z.string().min(1).max(100).trim().optional(),
   description: z.string().max(500).optional(),
@@ -22,7 +15,6 @@ const ItemUpdateSchema = z.object({
   dietaryTags: z.array(z.string().max(50)).max(10).optional(),
   available: z.boolean().optional(),
   imageUrl: z.string().max(500).optional(),
-  dimensions: DimensionsSchema,
 })
 
 export async function GET(_req: NextRequest, { params }: Params) {
