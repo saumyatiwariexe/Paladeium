@@ -5,10 +5,12 @@
  *  • Registers MindAR anchors and intercepts onTargetFound/onTargetLost.
  *  • Copies the live marker pose into a scene-managed group that we control
  *    (so we can keep it visible even when MindAR hides its own group).
- *  • Runs the PoseFilter every frame to reduce jitter.
  *  • Delegates to AnchorManager for pose persistence during marker loss.
  *  • Delegates to SensorFusion for orientation-based prediction.
  *  • Drives the TrackingStateMachine and exposes state-change events.
+ *
+ * Note: MindAR's internal One Euro Filter (filterBeta:1000) already provides
+ * optimal pose stability. No secondary filtering is applied here.
  *
  * The caller places AR content into `engine.innerGroup`.
  * The caller must call `engine.tick()` from the Three.js animation loop.
@@ -17,7 +19,6 @@
 import * as THREE                                   from 'three';
 import { CapabilityDetector, CapabilityTier }       from './CapabilityDetector.js';
 import { TrackingState, TrackingStateMachine }      from './StateMachine.js';
-import { PoseFilter }                               from './PoseFilter.js';
 import { SensorFusion }                             from './SensorFusion.js';
 import { AnchorManager }                            from './AnchorManager.js';
 
@@ -43,7 +44,6 @@ export class TrackingEngine {
 
   // Internals
   #sm            = new TrackingStateMachine();
-  #filter        = new PoseFilter();
   #sensors       = new SensorFusion();
   #anchor        = new AnchorManager();
   #capabilities  = null;
@@ -131,10 +131,8 @@ export class TrackingEngine {
     this.#activeAnchor  = anchor;
     this.#acquireFrames = 0;
 
-    // Re-entering from a loss state — go straight to LOCKED and soft-reset
-    // the filter so the pose blends smoothly rather than snapping.
+    // Re-entering from a loss state — go straight to LOCKED.
     if (prev === TrackingState.PREDICTED || prev === TrackingState.RELOCALIZING) {
-      this.#filter.reset();   // clears history so SLERP starts fresh
       this.#sm.transition(TrackingState.LOCKED, 'reacquired');
     } else {
       this.#sm.force(TrackingState.ACQUIRING, 'target_found');
@@ -164,7 +162,6 @@ export class TrackingEngine {
     }
     if (s === TrackingState.DEGRADED     && ms > DEGRADED_RESET_MS)    {
       this.#anchor.reset();
-      this.#filter.reset();
       this.#sm.transition(TrackingState.SEARCHING, 'degraded_reset');
     }
   }
@@ -186,13 +183,12 @@ export class TrackingEngine {
       // ── Marker is currently detected ─────────────────────────────────────
       anchor.group.matrixWorld.decompose(_rawPos, _rawQuat, _rawScale);
 
-      const { position, quaternion } = this.#filter.update(_rawPos, _rawQuat);
-
-      this.managedGroup.position.copy(position);
-      this.managedGroup.quaternion.copy(quaternion);
+      // Trust MindAR's native One Euro Filter output directly — no secondary pass
+      this.managedGroup.position.copy(_rawPos);
+      this.managedGroup.quaternion.copy(_rawQuat);
       this.managedGroup.scale.copy(_rawScale);
 
-      this.#anchor.commit(position, quaternion);
+      this.#anchor.commit(_rawPos, _rawQuat);
 
       // Apply world-facing rotation correction to innerGroup
       this.innerGroup.rotation.x = Math.PI / 2;
@@ -219,8 +215,8 @@ export class TrackingEngine {
       return { markerVisible: false, confidence: 0 };
     }
 
-    const delta     = this.#sensors.getDeltaQuaternion();
-    const predicted = this.#anchor.getPredictedPose(delta);
+    // Freeze at last-known pose — sensor delta correction caused drift
+    const predicted = this.#anchor.getPredictedPose(null);
 
     if (!predicted) {
       this.managedGroup.visible = false;

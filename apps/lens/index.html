@@ -475,8 +475,9 @@
     let arStarted      = false;
 
     // Set by startAR() — used by loadArModel and demo mode
-    let trackingEngine = null;   // TrackingEngine instance (AR mode)
-    let uxController   = null;   // UXController instance  (AR mode)
+    let trackingEngine    = null;   // TrackingEngine instance (AR mode)
+    let uxController      = null;   // UXController instance  (AR mode)
+    let pendingModelLoad  = null;   // model filename to load once tracking locks
 
     // ─────────────────────────────────────────────────────────────────────────
     // DOM REFS
@@ -595,12 +596,14 @@
         return;
       }
 
-      // Require a locked or predicted tracking state in AR mode
-      const arActive = trackingEngine &&
-        (trackingEngine.state === 'locked' || trackingEngine.state === 'predicted');
+      // States where tracking is established enough to place the model
+      const READY_STATES = ['locked', 'predicted', 'relocalizing'];
+      const arActive = trackingEngine && READY_STATES.includes(trackingEngine.state);
 
       if (!arActive) {
         if (uxController) {
+          // AR started but marker not locked yet — queue the model for auto-load
+          pendingModelLoad = dish.model;
           uxController.showNoAnchorPrompt(true);
         } else {
           // In demo mode — load directly
@@ -609,6 +612,7 @@
         return;
       }
 
+      pendingModelLoad = null;
       loadArModel(dish.model);
     }
 
@@ -809,8 +813,15 @@
       const caps     = await trackingEngine.init();
       console.log(`[AR] Capability tier ${caps.tier} — sensors:${caps.hasSensors}`);
 
-      // Subscribe UX to state changes
-      trackingEngine.onStateChange(s => uxController.onStateChange(s));
+      // Subscribe UX to state changes; auto-load any pending model on lock
+      trackingEngine.onStateChange(s => {
+        uxController.onStateChange(s);
+        if (s === 'locked' && pendingModelLoad) {
+          const toLoad = pendingModelLoad;
+          pendingModelLoad = null;
+          loadArModel(toLoad);
+        }
+      });
 
       // Register up to 5 perspective-warp anchors
       for (let i = 0; i < 5; i++) {
