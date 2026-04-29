@@ -136,7 +136,7 @@ export default function NewMenuItemPage() {
       const data = await safeJson(res) as { url?: string, error?: string }
       if (!res.ok) throw new Error(data.error || 'Upload failed')
       if (data.url) {
-        setForm(f => ({ ...f, modelUrl: data.url }))
+        setForm(f => ({ ...f, modelUrl: data.url! }))
       }
     } catch (err: any) {
       setError(err.message || 'Upload error')
