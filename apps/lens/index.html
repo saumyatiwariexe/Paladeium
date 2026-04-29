@@ -9,25 +9,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
 
-  <!-- Catch all errors so they don't fail silently -->
-  <script>
-    window.addEventListener('error', function(e) {
-      alert("Script Error: " + e.message + "\nAt: " + e.filename + ":" + e.lineno);
-    });
-    window.addEventListener('unhandledrejection', function(e) {
-      alert("Promise Error: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
-    });
-  </script>
-
   <!-- ES Module Shims: Polyfill for import maps in older browsers (e.g. iOS < 16.4) -->
   <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
 
-  <!-- Importmap for Three.js and MindAR (ES Modules) -->
+  <!-- Importmap for Three.js and MindAR -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "three":              "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/":      "https://unpkg.com/three@0.160.0/examples/jsm/",
       "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
     }
   }
@@ -60,12 +50,10 @@
       position: fixed; inset: 0;
       z-index: 0;
     }
-    /* Only force full size for MindAR's own canvas, not demo canvas */
     #ar-container > canvas.mindar-canvas {
       width: 100% !important;
       height: 100% !important;
     }
-    /* Demo canvas always fills viewport */
     #demo-canvas {
       position: absolute !important;
       inset: 0 !important;
@@ -83,7 +71,6 @@
       transition: all 0.6s ease;
     }
     #scan-overlay.hidden { opacity: 0; pointer-events: none; }
-    /* When camera is active but target not yet found */
     #scan-overlay.scanning-mode {
       background: transparent;
       backdrop-filter: none;
@@ -394,7 +381,6 @@
 </head>
 <body>
 
-  <!-- AR Canvas will render here -->
   <div id="ar-container"></div>
 
   <!-- Top bar -->
@@ -419,21 +405,26 @@
     <div id="ar-init-status"></div>
   </div>
 
-  <!-- No anchor message (shown when menu tap but no anchor) -->
+  <!-- No-anchor prompt -->
   <div id="no-anchor-msg">
     <div class="icon">
-      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
+        <line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/>
+        <line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>
+      </svg>
     </div>
     <p>Point at the <strong>menu card</strong> first so the dish appears in AR</p>
   </div>
 
-  <!-- 3D model loading indicator -->
+  <!-- Model loading spinner -->
   <div id="model-loading">
     <div class="spinner"></div>
     <p>Loading 3D model…</p>
   </div>
 
-  <!-- Pinch-to-rotate hint -->
+  <!-- Drag / pinch hint -->
   <div id="ar-hint">
     <span>Drag to spin · pinch to scale</span>
   </div>
@@ -448,123 +439,61 @@
         <h3>Our Menu</h3>
         <span class="subtitle">Tap to view in AR</span>
       </div>
-
-      <!-- Category pills -->
       <div class="categories" id="categories">
         <button class="cat-pill active" data-cat="all">All</button>
-        <button class="cat-pill" data-cat="mains">Mains</button>
-        <button class="cat-pill" data-cat="starters">Starters</button>
-        <button class="cat-pill" data-cat="drinks">Drinks</button>
-        <button class="cat-pill" data-cat="desserts">Desserts</button>
       </div>
-
-      <!-- Dish Grid -->
       <div class="dish-grid" id="dish-grid"></div>
     </div>
   </div>
 
   <script src="./config.js"></script>
   <script>
-    // UI logic is now synchronous, ensuring buttons always work.
-    // 3D/AR libraries will be loaded dynamically on user interaction.
-
-    // ─────────────────────────────────────────────
-    // CONFIG — edit config.js to set the dashboard URL
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // CONFIGURATION
+    // ─────────────────────────────────────────────────────────────────────────
     const DASHBOARD_API = window.__PALADEIUM_API__ || 'http://localhost:3000';
-    let TARGETS_SRC = './targets/targets.mind';
+    let   TARGETS_SRC   = './targets/targets.mind';
 
-    // ─────────────────────────────────────────────
-    // MENU DATA — default fallback, replaced by API when ?r=slug is set
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // FALLBACK MENU  (replaced by dashboard API when ?r=slug is present)
+    // ─────────────────────────────────────────────────────────────────────────
     let MENU = [
-      {
-        id: 'burger',
-        name: 'Wagyu Smash Burger',
-        desc: 'Double patty, aged cheddar, truffle aioli',
-        price: '₹649',
-        emoji: '',
-        cat: 'mains',
-        model: 'burger.glb',
-        hasAR: true,
-      },
-      {
-        id: 'pizza',
-        name: 'Margherita Classico',
-        desc: 'San Marzano tomato, buffalo mozzarella',
-        price: '₹549',
-        emoji: '',
-        cat: 'mains',
-        model: null,
-        hasAR: false,
-      },
-      {
-        id: 'pasta',
-        name: 'Cacio e Pepe',
-        desc: 'Tonnarelli, romano, tellicherry pepper',
-        price: '₹479',
-        emoji: '',
-        cat: 'mains',
-        model: null,
-        hasAR: false,
-      },
-      {
-        id: 'salad',
-        name: 'Caesar Deluxe',
-        desc: 'Romaine, house dressing, parmesan crisp',
-        price: '₹329',
-        emoji: '',
-        cat: 'starters',
-        model: null,
-        hasAR: false,
-      },
-      {
-        id: 'mojito',
-        name: 'Virgin Mojito',
-        desc: 'Fresh lime, mint, soda, brown sugar',
-        price: '₹199',
-        emoji: '',
-        cat: 'drinks',
-        model: null,
-        hasAR: false,
-      },
-      {
-        id: 'lava',
-        name: 'Chocolate Lava Cake',
-        desc: 'Warm Valrhona centre, vanilla bean ice cream',
-        price: '₹299',
-        emoji: '',
-        cat: 'desserts',
-        model: null,
-        hasAR: false,
-      },
+      { id:'burger', name:'Wagyu Smash Burger',   desc:'Double patty, aged cheddar, truffle aioli',    price:'₹649', emoji:'🍔', cat:'mains',    model:'burger.glb', hasAR:true  },
+      { id:'pizza',  name:'Margherita Classico',  desc:'San Marzano tomato, buffalo mozzarella',        price:'₹549', emoji:'🍕', cat:'mains',    model:null,         hasAR:false },
+      { id:'pasta',  name:'Cacio e Pepe',          desc:'Tonnarelli, romano, tellicherry pepper',        price:'₹479', emoji:'🍝', cat:'mains',    model:null,         hasAR:false },
+      { id:'salad',  name:'Caesar Deluxe',         desc:'Romaine, house dressing, parmesan crisp',      price:'₹329', emoji:'🥗', cat:'starters', model:null,         hasAR:false },
+      { id:'mojito', name:'Virgin Mojito',         desc:'Fresh lime, mint, soda, brown sugar',          price:'₹199', emoji:'🍹', cat:'drinks',   model:null,         hasAR:false },
+      { id:'lava',   name:'Chocolate Lava Cake',   desc:'Warm Valrhona centre, vanilla bean ice cream', price:'₹299', emoji:'🍫', cat:'desserts', model:null,         hasAR:false },
     ];
 
-    // ─────────────────────────────────────────────
-    // STATE
-    // ─────────────────────────────────────────────
-    let anchorFound   = false;
-    let activeDishId  = null;
-    let arModel       = null;   // Three.js Group loaded from GLB
+    // ─────────────────────────────────────────────────────────────────────────
+    // RUNTIME STATE
+    // ─────────────────────────────────────────────────────────────────────────
+    let activeDishId   = null;
+    let arModel        = null;   // THREE.Group loaded from the active GLB
     let activeCategory = 'all';
+    let arStarted      = false;
 
-    // ─────────────────────────────────────────────
+    // Set by startAR() — used by loadArModel and demo mode
+    let trackingEngine = null;   // TrackingEngine instance (AR mode)
+    let uxController   = null;   // UXController instance  (AR mode)
+
+    // ─────────────────────────────────────────────────────────────────────────
     // DOM REFS
-    // ─────────────────────────────────────────────
-    const scanOverlay   = document.getElementById('scan-overlay');
-    const statusDot     = document.querySelector('.dot');
-    const statusText    = document.getElementById('status-text');
-    const anchorStatus  = document.getElementById('anchor-status');
-    const menuPanel     = document.getElementById('menu-panel');
-    const dishGrid      = document.getElementById('dish-grid');
-    const modelLoading  = document.getElementById('model-loading');
-    const arHint        = document.getElementById('ar-hint');
-    const noAnchorMsg   = document.getElementById('no-anchor-msg');
-    const catContainer  = document.getElementById('categories');
+    // ─────────────────────────────────────────────────────────────────────────
+    const scanOverlay  = document.getElementById('scan-overlay');
+    const statusText   = document.getElementById('status-text');
+    const anchorStatus = document.getElementById('anchor-status');
+    const menuPanel    = document.getElementById('menu-panel');
+    const dishGrid     = document.getElementById('dish-grid');
+    const modelLoading = document.getElementById('model-loading');
+    const arHint       = document.getElementById('ar-hint');
+    const noAnchorMsg  = document.getElementById('no-anchor-msg');
+    const catContainer = document.getElementById('categories');
 
-    // ─────────────────────────────────────────────
-    // RENDER MENU
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // MENU RENDERING
+    // ─────────────────────────────────────────────────────────────────────────
     function renderMenu(cat) {
       const items = cat === 'all' ? MENU : MENU.filter(d => d.cat === cat);
       dishGrid.innerHTML = items.map(dish => `
@@ -580,7 +509,14 @@
       `).join('');
     }
 
-    // Category pill click
+    function renderCategories(cats) {
+      catContainer.innerHTML =
+        '<button class="cat-pill active" data-cat="all">All</button>' +
+        cats.map(c =>
+          `<button class="cat-pill" data-cat="${c.name.toLowerCase()}">${c.emoji} ${c.name}</button>`
+        ).join('');
+    }
+
     catContainer.addEventListener('click', e => {
       const pill = e.target.closest('.cat-pill');
       if (!pill) return;
@@ -590,17 +526,9 @@
       renderMenu(activeCategory);
     });
 
-    // ─────────────────────────────────────────────
-    // DYNAMIC CATEGORIES + ASYNC INIT
-    // ─────────────────────────────────────────────
-    function renderCategories(cats) {
-      catContainer.innerHTML =
-        '<button class="cat-pill active" data-cat="all">All</button>' +
-        cats.map(c =>
-          `<button class="cat-pill" data-cat="${c.name.toLowerCase()}">${c.emoji} ${c.name}</button>`
-        ).join('');
-    }
-
+    // ─────────────────────────────────────────────────────────────────────────
+    // ASYNC INIT — fetch menu from dashboard API
+    // ─────────────────────────────────────────────────────────────────────────
     async function init() {
       const slug = new URLSearchParams(location.search).get('r');
       if (slug) {
@@ -610,14 +538,14 @@
             const data = await res.json();
             if (Array.isArray(data.menu) && data.menu.length) {
               MENU = data.menu.map(item => ({
-                id:     item.id,
-                name:   item.name,
-                desc:   item.description ?? item.desc ?? '',
-                price:  typeof item.price === 'number' ? '₹' + item.price : (item.price ?? ''),
-                emoji:  item.emoji ?? '',
-                cat:    (item.categoryId ?? item.cat ?? 'mains').toLowerCase(),
-                model:  item.modelUrl ?? item.model ?? null,
-                hasAR:  item.hasAr ?? item.hasAR ?? false,
+                id:    item.id,
+                name:  item.name,
+                desc:  item.description ?? item.desc ?? '',
+                price: typeof item.price === 'number' ? '₹' + item.price : (item.price ?? ''),
+                emoji: item.emoji ?? '',
+                cat:   (item.categoryId ?? item.cat ?? 'mains').toLowerCase(),
+                model: item.modelUrl ?? item.model ?? null,
+                hasAR: item.hasAr ?? item.hasAR ?? false,
               }));
             }
             if (data.restaurant?.name) document.title = `${data.restaurant.name} — AR Menu`;
@@ -626,8 +554,8 @@
               renderCategories(data.categories);
             }
           }
-        } catch (e) {
-          console.warn('[Paladeium] API unavailable, using default menu');
+        } catch {
+          console.warn('[Paladeium] API unavailable — using default menu');
         }
       }
       renderMenu('all');
@@ -635,154 +563,130 @@
 
     init();
 
-    // Menu toggle and swipe logic
+    // ─────────────────────────────────────────────────────────────────────────
+    // MENU PANEL — toggle / swipe
+    // ─────────────────────────────────────────────────────────────────────────
     let touchStartY = 0;
-    const swipeThreshold = 50;
-
-    const menuToggle = document.getElementById('menu-toggle');
-    menuToggle.addEventListener('click', () => {
+    document.getElementById('menu-toggle').addEventListener('click', () => {
       menuPanel.classList.toggle('minimized');
     });
-
-    // Detect swipes on the header area
-    menuPanel.addEventListener('touchstart', e => {
-      touchStartY = e.touches[0].clientY;
-    }, { passive: true });
-
+    menuPanel.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
     menuPanel.addEventListener('touchend', e => {
-      const touchEndY = e.changedTouches[0].clientY;
-      const deltaY = touchEndY - touchStartY;
-
-      if (Math.abs(deltaY) > swipeThreshold) {
-        if (deltaY > 0) {
-          // Swipe Down -> Hide
-          menuPanel.classList.add('minimized');
-        } else {
-          // Swipe Up -> Show
-          menuPanel.classList.remove('minimized');
-        }
+      const delta = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(delta) > 50) {
+        menuPanel.classList.toggle('minimized', delta > 0);
       }
     }, { passive: true });
 
-    // ─────────────────────────────────────────────
-    // GLOBALS for AR objects (set later if AR available)
-    // ─────────────────────────────────────────────
-    let mindarThree, renderer, scene, camera;
-    let anchors = []; // Array to hold 5 perspective anchors
-    let activeAnchor = null; // The anchor currently driving the view
-
-
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
     // DISH SELECTION
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
     function selectDish(dishId) {
       const dish = MENU.find(d => d.id === dishId);
       if (!dish) return;
 
-      // Always track which dish is selected so onTargetFound can reload it
       activeDishId = dishId;
-      console.log('[AR] selectDish:', dish.name, '| model:', dish.model, '| anchorFound:', anchorFound);
-
-      // Update active state
       document.querySelectorAll('.dish-card').forEach(c => c.classList.remove('active'));
       const card = document.getElementById('dish-' + dishId);
       if (card) card.classList.add('active');
 
       if (!dish.model) {
         clearArModel();
-        showNoAnchorMsg(false);
         return;
       }
 
-      if (!anchorFound) {
-        showNoAnchorMsg(true);
+      // Require a locked or predicted tracking state in AR mode
+      const arActive = trackingEngine &&
+        (trackingEngine.state === 'locked' || trackingEngine.state === 'predicted');
+
+      if (!arActive) {
+        if (uxController) {
+          uxController.showNoAnchorPrompt(true);
+        } else {
+          // In demo mode — load directly
+          if (typeof loadDemoModel === 'function') loadDemoModel(dish.model);
+        }
         return;
       }
 
-      // Load model
       loadArModel(dish.model);
     }
 
-    function showNoAnchorMsg(show) {
-      noAnchorMsg.classList.toggle('visible', show);
-      if (show) setTimeout(() => noAnchorMsg.classList.remove('visible'), 3000);
-    }
-
+    // ─────────────────────────────────────────────────────────────────────────
+    // AR MODEL — clear / load
+    // ─────────────────────────────────────────────────────────────────────────
     function clearArModel() {
-      if (arModel) {
-        anchors.forEach(a => {
-          if (a.innerGroup) a.innerGroup.remove(arModel);
-        });
-        arModel = null;
+      if (arModel && trackingEngine) {
+        trackingEngine.innerGroup.remove(arModel);
       }
+      arModel = null;
     }
 
     function loadArModel(filename) {
       clearArModel();
       modelLoading.classList.add('visible');
-      
-      // Safety check for library
-      if (!window.THREE || !window.THREE.GLTFLoader) {
-        console.error('3D Libraries not ready');
+
+      if (!window.THREE?.GLTFLoader) {
+        console.error('[AR] GLTFLoader not ready');
         modelLoading.classList.remove('visible');
         return;
       }
 
-      const gltfLoader = new window.THREE.GLTFLoader();
+      const url = /^https?:\/\//.test(filename) ? filename : './' + filename;
+      console.log('[AR] Loading model:', url);
 
-      // Resolve URL: full URLs are used as-is, filenames are relative to lens folder
-      const modelUrl = /^https?:\/\//.test(filename) ? filename : './' + filename;
-      console.log('[AR] Loading model from:', modelUrl);
-
-      gltfLoader.load(
-        modelUrl,
-        (gltf) => {
+      new window.THREE.GLTFLoader().load(
+        url,
+        gltf => {
           modelLoading.classList.remove('visible');
           arModel = gltf.scene;
 
-          // Center + sit flush on anchor
+          // Scale to a sensible real-world size (~18 cm)
           const box = new window.THREE.Box3().setFromObject(arModel);
-          const size = new window.THREE.Vector3();
-          box.getSize(size);
-          const maxDim = Math.max(size.x, size.y, size.z);
-          const targetSize = 0.18; // ~18cm in AR space
-          const scale = targetSize / maxDim;
+          const sz  = new window.THREE.Vector3();
+          box.getSize(sz);
+          const scale = 0.18 / Math.max(sz.x, sz.y, sz.z);
           arModel.scale.setScalar(scale);
 
-          const center = new window.THREE.Vector3();
-          box.getCenter(center);
+          // Centre horizontally, sit on anchor surface
+          const centre = new window.THREE.Vector3();
+          box.getCenter(centre);
           const baseY = -box.min.y * scale;
           arModel.userData.baseY = baseY;
-          arModel.position.set(-center.x * scale, baseY, -center.z * scale);
+          arModel.position.set(-centre.x * scale, baseY, -centre.z * scale);
 
-          // lookAt points innerGroup's +Z away from camera; flip model 180° so its
-          // front face (typically +Z in GLTF) faces the camera instead of away.
+          // Flip 180° so the model faces the camera (GLTF +Z → towards viewer)
           arModel.rotation.y = Math.PI;
 
-          // Attach to the active anchor's innerGroup (MindAR manages its world pose)
-          if (activeAnchor?.innerGroup) activeAnchor.innerGroup.add(arModel);
-          console.log('[AR] Model loaded ✓ scale=', scale.toFixed(4), 'baseY=', baseY.toFixed(4));
+          // Attach to the engine-managed group
+          if (trackingEngine) {
+            trackingEngine.innerGroup.add(arModel);
+          }
 
-          // Show rotation hint
-          arHint.classList.add('visible');
-          setTimeout(() => arHint.classList.remove('visible'), 4000);
+          if (uxController) uxController.showArHint();
+          else {
+            arHint.classList.add('visible');
+            setTimeout(() => arHint.classList.remove('visible'), 4000);
+          }
+
+          console.log('[AR] Model loaded ✓ scale=', scale.toFixed(4));
         },
         undefined,
-        (error) => {
-          console.error('[AR] GLB load error:', error);
+        err => {
+          console.error('[AR] GLB load error:', err);
           modelLoading.classList.remove('visible');
-          statusText.textContent = 'Model failed to load';
+          if (uxController) uxController.setModelError();
+          else statusText.textContent = 'Model failed to load';
         }
       );
     }
 
-
-    // ─────────────────────────────────────────────
-    // TOUCH — drag to rotate 3D model (AR mode)
-    // ─────────────────────────────────────────────
-    let isDragging  = false;
-    let lastTouchX  = 0;
-    let lastTouchY  = 0;
+    // ─────────────────────────────────────────────────────────────────────────
+    // TOUCH — drag to rotate, pinch to scale (AR mode)
+    // ─────────────────────────────────────────────────────────────────────────
+    let isDragging    = false;
+    let lastTouchX    = 0;
+    let lastTouchY    = 0;
     let lastPinchDist = null;
 
     const arContainer = document.getElementById('ar-container');
@@ -802,17 +706,16 @@
 
     arContainer.addEventListener('touchmove', e => {
       if (isDragging && arModel && e.touches.length === 1) {
-        // Y-axis only — drag left/right to spin the model, no X tilt
         arModel.rotation.y += (e.touches[0].clientX - lastTouchX) * 0.01;
         lastTouchX = e.touches[0].clientX;
         lastTouchY = e.touches[0].clientY;
       }
       if (e.touches.length === 2 && arModel && lastPinchDist) {
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dx   = e.touches[0].clientX - e.touches[1].clientX;
+        const dy   = e.touches[0].clientY - e.touches[1].clientY;
         const dist = Math.hypot(dx, dy);
-        const factor = dist / lastPinchDist;
-        arModel.scale.multiplyScalar(factor);
+        const f    = dist / lastPinchDist;
+        arModel.scale.multiplyScalar(f);
         const s = arModel.scale.x;
         if (s < 0.04) arModel.scale.setScalar(0.04);
         if (s > 0.6)  arModel.scale.setScalar(0.6);
@@ -822,237 +725,200 @@
 
     arContainer.addEventListener('touchend', () => { isDragging = false; lastPinchDist = null; });
 
-    // ─────────────────────────────────────────────
-    // START AR — targets.mind checked FIRST, MindAR only init if available
-    // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // CLOCK helper (shared by AR and demo render loops)
+    // ─────────────────────────────────────────────────────────────────────────
     const clock = {
-      getElapsedTime: () => {
-        if (!window._startTime) window._startTime = Date.now();
-        return (Date.now() - window._startTime) / 1000;
-      }
+      _start: null,
+      getElapsedTime() {
+        if (!this._start) this._start = Date.now();
+        return (Date.now() - this._start) / 1000;
+      },
     };
 
-    // arStarted declared here (before any async IIFE) to avoid TDZ errors
-    let arStarted = false;
-
-
-    async function startAR() {
-      console.log('[AR] Starting MindAR...');
-      const initStatus = document.getElementById('ar-init-status');
-      if (initStatus) initStatus.textContent = 'Requesting camera access…';
-
-      try {
-        mindarThree = new window.MINDAR.IMAGE.MindARThree({
-          container: document.getElementById('ar-container'),
-          imageTargetSrc: TARGETS_SRC,
-          maxTrack: 1,
-          uiLoading: 'no',
-          uiScanning: 'no',
-          uiError: 'no',
-          filterMinCF:  0.001,
-          filterBeta:   1000,
-          warmupTolerance: 5,
-          missTolerance:   10,
-        });
-
-        renderer = mindarThree.renderer;
-        scene    = mindarThree.scene;
-        camera   = mindarThree.camera;
-
-        // Lighting
-        scene.add(new window.THREE.AmbientLight(0xffffff, 1.4));
-        const dl = new window.THREE.DirectionalLight(0xfff5e0, 2.2);
-        dl.position.set(1, 3, 2); scene.add(dl);
-        const fl = new window.THREE.DirectionalLight(0xd4a853, 0.8);
-        fl.position.set(-2, 1, -1); scene.add(fl);
-
-        // ─── Anchors — try up to 5 (one per compiled perspective warp) ──
-        for (let i = 0; i < 5; i++) {
-          let a;
-          try { a = mindarThree.addAnchor(i); } catch(e) {
-            console.log(`[AR] Mind file has ${i} target(s).`);
-            break;
-          }
-
-          // innerGroup is a child of MindAR's anchor group.
-          // MindAR automatically drives a.group's world pose; innerGroup
-          // corrects the rotation per-frame so the model is world-aligned.
-          a.innerGroup = new window.THREE.Group();
-          a.group.add(a.innerGroup);
-          anchors.push(a);
-
-          a.onTargetFound = () => {
-            activeAnchor = a;
-            anchorFound  = true;
-            scanOverlay.classList.add('hidden');
-            menuPanel.classList.add('visible');
-            menuPanel.classList.remove('minimized');
-            anchorStatus.classList.add('found');
-            statusText.textContent = 'Anchor locked';
-
-            if (activeDishId) {
-              const dish = MENU.find(d => d.id === activeDishId);
-              if (dish?.model) {
-                if (arModel) {
-                  // Re-attach existing model — no refetch needed
-                  if (!a.innerGroup.children.includes(arModel)) {
-                    a.innerGroup.add(arModel);
-                  }
-                } else {
-                  loadArModel(dish.model);
-                }
-              }
-            }
-          };
-
-          a.onTargetLost = () => {
-            if (activeAnchor !== a) return;
-            activeAnchor = null;
-            anchorFound  = false;
-            anchorStatus.classList.remove('found');
-            statusText.textContent = 'Scanning…';
-            // Don't clear arModel — MindAR hides a.group automatically.
-            // Keeping the model loaded means instant re-display on re-detect.
-          };
-        }
-
-        if (anchors.length === 0) throw new Error('No valid targets in mind file');
-
-        // ─── Animation loop ─────────────────────────────────────────
-        renderer.setAnimationLoop(() => {
-          anchors.forEach(a => {
-            if (a.group.visible && a.innerGroup) {
-              a.innerGroup.rotation.x = Math.PI / 2;
-            }
-          });
-
-          // Subtle float
-          if (arModel && arModel.userData.baseY !== undefined) {
-            const t = clock.getElapsedTime();
-            arModel.position.y = arModel.userData.baseY + Math.sin(t * 1.2) * 0.006;
-          }
-
-          mindarThree.renderer.render(scene, camera);
-        });
-
-        console.log('[AR] MindAR initialized, calling start()...');
-        await mindarThree.start();
-        console.log('[AR] MindAR started successfully ✓');
-
-        document.getElementById('scan-overlay').classList.add('scanning-mode');
-        document.getElementById('start-ar-btn').style.display = 'none';
-        const initStatus2 = document.getElementById('ar-init-status');
-        if (initStatus2) initStatus2.textContent = 'Point camera at the menu card to scan';
-
-      } catch (err) {
-        console.error('[AR] MindAR failed:', err.message, err);
-        alert('AR Camera Failed: ' + err.message + '\n\nFalling back to Demo Mode.');
-        showDemoMode();
-      }
-    }
-
-    // Dynamic loading function safely reused
+    // ─────────────────────────────────────────────────────────────────────────
+    // THREE.js LIBRARY LOADER
+    // ─────────────────────────────────────────────────────────────────────────
     async function getThreeLibs() {
-      if (window.THREE && window.THREE.GLTFLoader) return window.THREE;
+      if (window.THREE?.GLTFLoader) return window.THREE;
       statusText.textContent = 'Connecting to 3D engine…';
-      
+
       const [THREE, { GLTFLoader }] = await Promise.all([
         import('three'),
-        import('three/addons/loaders/GLTFLoader.js')
+        import('three/addons/loaders/GLTFLoader.js'),
       ]);
-      
-      // Copy exports from the module namespace (Object.keys is safe for namespace objects)
-      const threeWrapper = {};
-      Object.keys(THREE).forEach(k => { try { threeWrapper[k] = THREE[k]; } catch(e) {} });
-      threeWrapper.GLTFLoader = GLTFLoader;
-      window.THREE = threeWrapper;
-      return window.THREE;
+
+      // Copy module namespace exports into a mutable wrapper
+      const wrap = {};
+      Object.keys(THREE).forEach(k => { try { wrap[k] = THREE[k]; } catch { /* */ } });
+      wrap.GLTFLoader = GLTFLoader;
+      window.THREE    = wrap;
+      return wrap;
     }
 
-    async function showDemoMode() {
-      // 1. Wipe any MindAR DOM that was added during failed init
-      const arCont = document.getElementById('ar-container');
-      arCont.innerHTML = '';
+    // ─────────────────────────────────────────────────────────────────────────
+    // MAIN AR START
+    // ─────────────────────────────────────────────────────────────────────────
+    async function startAR() {
+      const initStatus = document.getElementById('ar-init-status');
+      if (initStatus) initStatus.textContent = 'Initialising AR…';
 
-      // 2. Load basic 3D libs for Demo
-      try {
-        await getThreeLibs();
-      } catch (err) {
-        console.error("Demo lib error:", err);
-        alert("Network Error: Could not download 3D menu assets.");
+      // Dynamic import of engine modules (ES modules, resolved via importmap for three)
+      const [
+        { TrackingEngine, TrackingState },
+        { UXController },
+        { Diagnostics },
+      ] = await Promise.all([
+        import('./js/TrackingEngine.js'),
+        import('./js/UXController.js'),
+        import('./js/Diagnostics.js'),
+      ]);
+
+      // Instantiate controllers
+      uxController   = new UXController();
+      const diagMode = new URLSearchParams(location.search).has('dev');
+      const diag     = new Diagnostics(diagMode);
+
+      // Build MindAR scene
+      const mindarThree = new window.MINDAR.IMAGE.MindARThree({
+        container:       document.getElementById('ar-container'),
+        imageTargetSrc:  TARGETS_SRC,
+        maxTrack:        1,
+        uiLoading:       'no',
+        uiScanning:      'no',
+        uiError:         'no',
+        filterMinCF:     0.001,
+        filterBeta:      1000,
+        warmupTolerance: 5,
+        missTolerance:   10,
+      });
+
+      const { renderer, scene, camera } = mindarThree;
+
+      // Lighting
+      scene.add(new window.THREE.AmbientLight(0xffffff, 1.4));
+      const dlKey  = new window.THREE.DirectionalLight(0xfff5e0, 2.2);
+      dlKey.position.set(1, 3, 2);
+      scene.add(dlKey);
+      const dlFill = new window.THREE.DirectionalLight(0xd4a853, 0.8);
+      dlFill.position.set(-2, 1, -1);
+      scene.add(dlFill);
+
+      // Create and initialise the tracking engine
+      trackingEngine = new TrackingEngine(scene);
+      const caps     = await trackingEngine.init();
+      console.log(`[AR] Capability tier ${caps.tier} — sensors:${caps.hasSensors}`);
+
+      // Subscribe UX to state changes
+      trackingEngine.onStateChange(s => uxController.onStateChange(s));
+
+      // Register up to 5 perspective-warp anchors
+      for (let i = 0; i < 5; i++) {
+        let anchor;
+        try { anchor = mindarThree.addAnchor(i); }
+        catch { console.log(`[AR] ${i} target perspective(s) compiled`); break; }
+
+        trackingEngine.registerAnchor(anchor);
+      }
+
+      // ── Animation loop ────────────────────────────────────────────────────
+      renderer.setAnimationLoop(() => {
+        // Advance tracking engine (pose filter + state machine + prediction)
+        const { markerVisible, confidence } = trackingEngine.tick();
+
+        // Float animation on the loaded model
+        if (arModel?.userData.baseY !== undefined) {
+          const t = clock.getElapsedTime();
+          arModel.position.y = arModel.userData.baseY + Math.sin(t * 1.2) * 0.006;
+        }
+
+        // Debug overlay
+        diag.tick({
+          state:         trackingEngine.state,
+          confidence,
+          tier:          caps.tier,
+          markerVisible,
+          modelLoaded:   !!arModel,
+        });
+
+        renderer.render(scene, camera);
+      });
+
+      if (initStatus) initStatus.textContent = 'Starting camera…';
+      await mindarThree.start();
+      console.log('[AR] MindAR started ✓');
+
+      scanOverlay.classList.add('scanning-mode');
+      document.getElementById('start-ar-btn').style.display = 'none';
+      if (initStatus) initStatus.textContent = 'Point camera at the menu card';
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DEMO MODE (fallback when camera is unavailable / no HTTPS)
+    // ─────────────────────────────────────────────────────────────────────────
+    let demoScene, demoCamera, demoRenderer, demoModel;
+    let demoIsDragging = false, demoLastX = 0, demoLastY = 0;
+
+    async function showDemoMode() {
+      document.getElementById('ar-container').innerHTML = '';
+
+      try { await getThreeLibs(); }
+      catch (err) {
+        alert('Network error: could not load 3D assets. ' + err.message);
         return;
       }
 
-      // 3. Show UI
       scanOverlay.classList.add('hidden');
       menuPanel.classList.add('visible');
       anchorStatus.classList.add('found');
-      statusText.textContent = 'Preview Mode';
-      anchorFound = true;
+      statusText.textContent = 'Preview mode';
 
-      // 3. Demo banner
+      // Demo banner
       if (!document.getElementById('demo-banner')) {
-        const banner = document.createElement('div');
-        banner.id = 'demo-banner';
-        banner.style.cssText = [
-          'position:fixed', 'top:60px', 'left:50%', 'transform:translateX(-50%)',
-          'z-index:55', 'background:rgba(212,168,83,0.12)', 'border:1px solid rgba(212,168,83,0.4)',
-          'border-radius:12px', 'padding:8px 16px', 'font-size:11px', 'letter-spacing:0.5px',
-          'color:#D4A853', 'text-align:center', 'white-space:nowrap', "font-family:'Inter',sans-serif"
-        ].join(';');
-        banner.textContent = '\u26A1 Preview Mode \u2014 point camera at menu card for AR';
-        document.body.appendChild(banner);
+        const b = document.createElement('div');
+        b.id = 'demo-banner';
+        b.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:55;'
+          + 'background:rgba(212,168,83,0.12);border:1px solid rgba(212,168,83,0.4);'
+          + 'border-radius:12px;padding:8px 16px;font-size:11px;letter-spacing:0.5px;'
+          + "color:#D4A853;text-align:center;white-space:nowrap;font-family:'Inter',sans-serif";
+        b.textContent = '⚡ Preview Mode — point camera at menu card for AR';
+        document.body.appendChild(b);
       }
 
-      // 4. Set up Three.js renderer for 3D model preview
       setupDemoRenderer();
     }
 
-    // ─── Demo renderer (no camera, just black bg + floating 3D model) ───
-    let demoScene, demoCamera, demoRenderer, demoModel, demoClock;
-    let demoIsDragging = false, demoLastX = 0, demoLastY = 0;
-
     function setupDemoRenderer() {
-      // Prevent multiple canvas creations if called multiple times
-      if (demoRenderer) return;
-      if (!window.THREE) return;
+      if (demoRenderer || !window.THREE) return;
 
-      demoScene    = new window.THREE.Scene();
-      demoCamera   = new window.THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
+      demoScene  = new window.THREE.Scene();
+      demoCamera = new window.THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 100);
       demoCamera.position.set(0, 0, 1.2);
 
       demoRenderer = new window.THREE.WebGLRenderer({ antialias: true, alpha: true });
-      demoRenderer.setPixelRatio(window.devicePixelRatio);
-      demoRenderer.setSize(window.innerWidth, window.innerHeight);
+      demoRenderer.setPixelRatio(devicePixelRatio);
+      demoRenderer.setSize(innerWidth, innerHeight);
       demoRenderer.setClearColor(0x0A0A0F, 1);
       demoRenderer.domElement.id = 'demo-canvas';
       document.getElementById('ar-container').appendChild(demoRenderer.domElement);
 
-      // Lighting
       demoScene.add(new window.THREE.AmbientLight(0xffffff, 1.6));
       const dl = new window.THREE.DirectionalLight(0xfff5e0, 2.5);
-      dl.position.set(1, 3, 2);
-      demoScene.add(dl);
+      dl.position.set(1, 3, 2); demoScene.add(dl);
       const fl = new window.THREE.DirectionalLight(0xd4a853, 1.0);
-      fl.position.set(-2, 1, -1);
-      demoScene.add(fl);
-
-      demoClock = new THREE.Clock();
+      fl.position.set(-2, 1, -1); demoScene.add(fl);
 
       // Override selectDish for demo mode
-      window._origSelectDish = window.selectDish;
-      window.selectDish = function(dishId) {
+      window.selectDish = function (dishId) {
         const dish = MENU.find(d => d.id === dishId);
         if (!dish) return;
         document.querySelectorAll('.dish-card').forEach(c => c.classList.remove('active'));
         const card = document.getElementById('dish-' + dishId);
         if (card) card.classList.add('active');
         activeDishId = dishId;
-        if (!dish.model) { loadDemoModel(null); return; }
-        loadDemoModel(dish.model);
+        loadDemoModel(dish.model || null);
       };
 
-      // Touch/mouse for demo rotation
       const dc = demoRenderer.domElement;
       dc.addEventListener('mousedown', e => { demoIsDragging = true; demoLastX = e.clientX; demoLastY = e.clientY; });
       dc.addEventListener('mousemove', e => {
@@ -1061,135 +927,124 @@
         demoModel.rotation.x += (e.clientY - demoLastY) * 0.008;
         demoLastX = e.clientX; demoLastY = e.clientY;
       });
-      dc.addEventListener('mouseup', () => demoIsDragging = false);
-      dc.addEventListener('touchstart', e => { if(e.touches.length===1){ demoIsDragging=true; demoLastX=e.touches[0].clientX; demoLastY=e.touches[0].clientY; }}, {passive:true});
+      dc.addEventListener('mouseup', () => { demoIsDragging = false; });
+      dc.addEventListener('touchstart', e => {
+        if (e.touches.length === 1) { demoIsDragging = true; demoLastX = e.touches[0].clientX; demoLastY = e.touches[0].clientY; }
+      }, { passive: true });
       dc.addEventListener('touchmove', e => {
-        if(!demoIsDragging||!demoModel||e.touches.length!==1) return;
-        demoModel.rotation.y += (e.touches[0].clientX - demoLastX)*0.012;
-        demoModel.rotation.x += (e.touches[0].clientY - demoLastY)*0.008;
-        demoLastX=e.touches[0].clientX; demoLastY=e.touches[0].clientY;
-      }, {passive:true});
-      dc.addEventListener('touchend', () => demoIsDragging=false);
+        if (!demoIsDragging || !demoModel || e.touches.length !== 1) return;
+        demoModel.rotation.y += (e.touches[0].clientX - demoLastX) * 0.012;
+        demoModel.rotation.x += (e.touches[0].clientY - demoLastY) * 0.008;
+        demoLastX = e.touches[0].clientX; demoLastY = e.touches[0].clientY;
+      }, { passive: true });
+      dc.addEventListener('touchend', () => { demoIsDragging = false; });
 
-      // Resize
       window.addEventListener('resize', () => {
-        demoCamera.aspect = window.innerWidth / window.innerHeight;
+        demoCamera.aspect = innerWidth / innerHeight;
         demoCamera.updateProjectionMatrix();
-        demoRenderer.setSize(window.innerWidth, window.innerHeight);
+        demoRenderer.setSize(innerWidth, innerHeight);
       });
 
-      // Render loop
-      function demoLoop() {
-        requestAnimationFrame(demoLoop);
+      (function loop() {
+        requestAnimationFrame(loop);
         if (demoModel) {
-          const t = clock.getElapsedTime(); // Use shared clock logic
+          const t = clock.getElapsedTime();
           demoModel.position.y = Math.sin(t * 1.2) * 0.04;
           if (!demoIsDragging) demoModel.rotation.y += 0.006;
         }
         demoRenderer.render(demoScene, demoCamera);
-      }
-      demoLoop();
+      })();
     }
 
     function loadDemoModel(filename) {
       if (demoModel) { demoScene.remove(demoModel); demoModel = null; }
-      if (!filename) return;
+      if (!filename || !window.THREE?.GLTFLoader) return;
 
       modelLoading.classList.add('visible');
-      
-      if (!window.THREE || !window.THREE.GLTFLoader) {
-          console.error('Demo Loader not ready');
-          return;
-      }
-
-      const gltfL = new window.THREE.GLTFLoader();
-      gltfL.load(
+      new window.THREE.GLTFLoader().load(
         './' + filename,
         gltf => {
           modelLoading.classList.remove('visible');
           demoModel = gltf.scene;
 
-          // Auto-fit
           const box = new window.THREE.Box3().setFromObject(demoModel);
-          const size = new window.THREE.Vector3();
-          box.getSize(size);
-          const maxDim = Math.max(size.x, size.y, size.z);
-          const sc = 0.7 / maxDim;
+          const sz  = new window.THREE.Vector3();
+          box.getSize(sz);
+          const sc = 0.7 / Math.max(sz.x, sz.y, sz.z);
           demoModel.scale.setScalar(sc);
-          const center = new window.THREE.Vector3();
-          box.getCenter(center);
-          demoModel.position.set(-center.x*sc, -center.y*sc, -center.z*sc);
+          const centre = new window.THREE.Vector3();
+          box.getCenter(centre);
+          demoModel.position.set(-centre.x * sc, -centre.y * sc, -centre.z * sc);
 
           demoScene.add(demoModel);
           arHint.classList.add('visible');
           setTimeout(() => arHint.classList.remove('visible'), 4000);
         },
-        null,
+        undefined,
         err => {
-          console.error('Demo GLB load error:', err);
+          console.error('[Demo] GLB load error:', err);
           modelLoading.classList.remove('visible');
         }
       );
     }
 
-    // ─────────────────────────────────────────────
-    // HANDLE START BUTTON — user gesture required for camera on mobile
-    // ─────────────────────────────────────────────
-    // arStarted is declared above (before pipeline block) — do not re-declare
-
+    // ─────────────────────────────────────────────────────────────────────────
+    // HANDLE START BUTTON
+    // ─────────────────────────────────────────────────────────────────────────
     async function handleStartAR() {
       if (arStarted) return;
       arStarted = true;
 
       const btn    = document.getElementById('start-ar-btn');
       const status = document.getElementById('ar-init-status');
-
       btn.disabled = true;
       btn.textContent = 'Starting…';
-      status.textContent = 'Checking environment & camera access…';
 
-      // 1. Check if we are on a Secure Context (HTTPS or localhost)
+      // Require secure context
       if (!window.isSecureContext) {
-        alert("Camera access is blocked by your browser because this is not a secure connection (HTTPS). Falling back to Demo Mode.\n\nTip: Use a tool like ngrok, or configure your local server to use HTTPS.");
+        alert('Camera access requires HTTPS. Falling back to preview mode.');
         showDemoMode();
         return;
       }
 
-      // 2. Explicitly request camera permission immediately on user tap
+      // Request camera permission explicitly (user gesture)
       try {
-        status.textContent = 'Requesting camera permission…';
+        status.textContent = 'Requesting camera…';
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        // Stop the tracks immediately so MindAR can re-request with its own constraints
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach(t => t.stop());
       } catch (err) {
-        console.error('[AR] Permission check failed:', err);
-        alert('Camera permission denied or camera not accessible: ' + err.message + '\n\nFalling back to Demo Mode.');
+        alert('Camera permission denied: ' + err.message + '\n\nFalling back to preview mode.');
         showDemoMode();
         return;
       }
 
-      // 3. Load modules dynamically and catch connection failures!
-      status.textContent = 'Connecting to AR libraries…';
+      // Load Three.js + MindAR
+      status.textContent = 'Loading AR libraries…';
       try {
         await getThreeLibs();
         const { MindARThree } = await import('mindar-image-three');
-
-        if (!window.MINDAR) window.MINDAR = {};
+        if (!window.MINDAR)       window.MINDAR       = {};
         if (!window.MINDAR.IMAGE) window.MINDAR.IMAGE = {};
         window.MINDAR.IMAGE.MindARThree = MindARThree;
-      } catch(err) {
-        alert("CRITICAL ERROR: Failed to download AR libraries from internet. (Code: " + err.message + "). Check connection or CDN status.");
-        showDemoMode(); // fallback
+      } catch (err) {
+        alert('Failed to load AR libraries: ' + err.message + '\n\nFalling back to preview mode.');
+        showDemoMode();
         return;
       }
 
-      status.textContent = 'Initializing AR engine…';
-      await startAR();
+      status.textContent = 'Initialising tracking…';
+      try {
+        await startAR();
+      } catch (err) {
+        console.error('[AR] startAR failed:', err);
+        alert('AR failed: ' + err.message + '\n\nFalling back to preview mode.');
+        showDemoMode();
+      }
     }
 
-    // Expose HTML inline handlers globally
+    // Expose to HTML event handlers
     window.handleStartAR = handleStartAR;
-    window.selectDish = selectDish;
+    window.selectDish    = selectDish;
   </script>
 </body>
 </html>
