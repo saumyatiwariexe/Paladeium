@@ -476,8 +476,8 @@
     let arStarted      = false;
 
     // Set by startAR() — used by loadArModel and demo mode
-    let trackingEngine    = null;   // TrackingEngine instance (AR mode)
     let uxController      = null;   // UXController instance  (AR mode)
+    let currentSlug       = null;   // Active restaurant slug (e.g. 'the-grand-spice')
     let pendingModelLoad  = null;   // model filename to load once tracking locks
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -533,6 +533,7 @@
     // ─────────────────────────────────────────────────────────────────────────
     async function init() {
       const slug = new URLSearchParams(location.search).get('r');
+      currentSlug = slug;
       if (slug) {
         try {
           const res = await fetch(`${DASHBOARD_API}/api/restaurants/${slug}/menu`);
@@ -638,7 +639,13 @@
         return;
       }
 
-      const url = /^https?:\/\//.test(filename) ? filename : './' + filename;
+      let url = /^https?:\/\//.test(filename) ? filename : './' + filename;
+
+      // If the model path is just a filename, look in the restaurant's models folder
+      if (currentSlug && filename && !filename.includes('/') && !/^https?:\/\//.test(filename)) {
+        url = `./models/${currentSlug}/${filename}`;
+      }
+
       console.log('[AR] Loading model:', url);
 
       new window.THREE.GLTFLoader().load(
@@ -994,7 +1001,13 @@
       if (demoModel) { demoScene.remove(demoModel); demoModel = null; }
       if (!filename) return;
 
-      const url = /^https?:\/\//.test(filename) ? filename : './' + filename;
+      let url = /^https?:\/\//.test(filename) ? filename : './' + filename;
+
+      // If the model path is just a filename, look in the restaurant's models folder
+      if (currentSlug && filename && !filename.includes('/') && !/^https?:\/\//.test(filename)) {
+        url = `./models/${currentSlug}/${filename}`;
+      }
+
       console.log('[Demo] Loading model:', url);
       modelLoading.classList.add('visible');
       new window.THREE.GLTFLoader().load(
