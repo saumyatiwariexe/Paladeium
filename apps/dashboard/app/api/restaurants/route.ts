@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { readDb, writeDb } from '@/lib/db'
 import { v4 as uuid } from 'uuid'
+import fs from 'fs'
+import path from 'path'
 
 const RestaurantSchema = z.object({
   name: z.string().min(1).max(100).trim(),
@@ -55,6 +57,18 @@ export async function POST(req: NextRequest) {
 
     db.restaurants.push(restaurant)
     await writeDb(db)
+
+    // Create folders for this restaurant in apps/lens
+    try {
+      const lensPath = path.join(process.cwd(), '..', 'lens')
+      const modelsPath = path.join(lensPath, 'models', slug)
+      const targetsPath = path.join(lensPath, 'targets', slug)
+      
+      if (!fs.existsSync(modelsPath)) fs.mkdirSync(modelsPath, { recursive: true })
+      if (!fs.existsSync(targetsPath)) fs.mkdirSync(targetsPath, { recursive: true })
+    } catch (err) {
+      console.error('Failed to create restaurant folders:', err)
+    }
 
     return NextResponse.json(restaurant, { status: 201 })
   } catch {

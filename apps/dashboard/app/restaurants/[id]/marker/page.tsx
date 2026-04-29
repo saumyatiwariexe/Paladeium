@@ -169,7 +169,9 @@ export default function MarkerPage() {
       const file = new File([blob], `${restaurant.slug}.mind`)
       const form = new FormData()
       form.append('file', file)
-      form.append('name', `markers/${restaurant.slug}-${Date.now()}.mind`)
+      form.append('name', `${restaurant.slug}-${Date.now()}.mind`)
+      form.append('slug', restaurant.slug)
+      form.append('type', 'target')
 
       const uploadRes = await fetch('/api/upload', { method: 'POST', body: form })
       const uploadData = await uploadRes.json().catch(() => ({})) as { url?: string; error?: string }
@@ -349,7 +351,7 @@ export default function MarkerPage() {
               <span className="text-white/80 text-sm font-medium">Save to Restaurant</span>
             </div>
             <p className="text-white/35 text-xs mb-4 leading-relaxed">
-              Uploads to cloud storage and links to this restaurant. The AR lens picks it up immediately.
+              Uploads directly to the <code className="font-mono">lens/targets/{restaurant?.slug}</code> folder and links to this restaurant. The AR lens picks it up immediately.
             </p>
 
             <div className="flex flex-col gap-2">

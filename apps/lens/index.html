@@ -548,6 +548,7 @@
                 cat:   (item.categoryId ?? item.cat ?? 'mains').toLowerCase(),
                 model: item.modelUrl ?? item.model ?? null,
                 hasAR: item.hasAr ?? item.hasAR ?? false,
+                dimensions: item.dimensions,
               }));
             }
             if (data.restaurant?.name) document.title = `${data.restaurant.name} — AR Menu`;
@@ -604,17 +605,17 @@
       if (!arActive) {
         if (uxController) {
           // AR started but marker not locked yet — queue the model for auto-load
-          pendingModelLoad = dish.model;
+          pendingModelLoad = dish;
           uxController.showNoAnchorPrompt(true);
         } else {
           // In demo mode — load directly
-          if (typeof loadDemoModel === 'function') loadDemoModel(dish.model);
+          if (typeof loadDemoModel === 'function') loadDemoModel(dish);
         }
         return;
       }
 
       pendingModelLoad = null;
-      loadArModel(dish.model);
+      loadArModel(dish);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -628,7 +629,28 @@
       arModel = null;
     }
 
-    function loadArModel(filename) {
+    function applyDimensions(model, dimensions) {
+      if (!dimensions || !dimensions.length || !dimensions.breadth || !dimensions.height) return false;
+      const factor = dimensions.unit === 'cm' ? 0.01 : dimensions.unit === 'in' ? 0.0254 : 1;
+      const targetX = dimensions.length * factor;
+      const targetY = dimensions.height * factor;
+      const targetZ = dimensions.breadth * factor;
+
+      const box = new window.THREE.Box3().setFromObject(model);
+      const sz = new window.THREE.Vector3();
+      box.getSize(sz);
+      
+      model.scale.set(
+        targetX / Math.max(sz.x, 0.0001),
+        targetY / Math.max(sz.y, 0.0001),
+        targetZ / Math.max(sz.z, 0.0001)
+      );
+      return true;
+    }
+
+    function loadArModel(dish) {
+      if (!dish || !dish.model) return;
+      const filename = dish.model;
       clearArModel();
       modelLoading.classList.add('visible');
 
@@ -647,12 +669,15 @@
           modelLoading.classList.remove('visible');
           arModel = gltf.scene;
 
-          // Scale to a sensible real-world size (~18 cm)
+          // Scale to a sensible real-world size (~18 cm) unless dimensions are provided
           const box = new window.THREE.Box3().setFromObject(arModel);
           const sz  = new window.THREE.Vector3();
           box.getSize(sz);
-          const scale = 0.18 / Math.max(sz.x, sz.y, sz.z);
-          arModel.scale.setScalar(scale);
+          
+          if (!applyDimensions(arModel, dish.dimensions)) {
+            const scale = 0.18 / Math.max(sz.x, sz.y, sz.z);
+            arModel.scale.setScalar(scale);
+          }
 
           // Centre horizontally, sit on anchor surface
           const centre = new window.THREE.Vector3();
@@ -937,7 +962,7 @@
         const card = document.getElementById('dish-' + dishId);
         if (card) card.classList.add('active');
         activeDishId = dishId;
-        loadDemoModel(dish.model || null);
+        loadDemoModel(dish);
       };
 
       const dc = demoRenderer.domElement;
@@ -977,7 +1002,8 @@
       })();
     }
 
-    function loadDemoModel(filename) {
+    function loadDemoModel(dish) {
+      const filename = dish ? dish.model : null;
       // Guard: demoScene may not be initialised yet (e.g. called before
       // setupDemoRenderer completes), or THREE may not be loaded yet.
       if (!demoScene || !window.THREE?.GLTFLoader) {
@@ -986,7 +1012,7 @@
         // overridden selectDish, but if called directly we attempt a retry.
         if (filename) {
           setTimeout(() => {
-            if (demoScene && window.THREE?.GLTFLoader) loadDemoModel(filename);
+            if (demoScene && window.THREE?.GLTFLoader) loadDemoModel(dish);
           }, 500);
         }
         return;
@@ -1006,8 +1032,11 @@
           const box = new window.THREE.Box3().setFromObject(demoModel);
           const sz  = new window.THREE.Vector3();
           box.getSize(sz);
-          const sc = 0.7 / Math.max(sz.x, sz.y, sz.z);
-          demoModel.scale.setScalar(sc);
+          
+          if (!applyDimensions(demoModel, dish.dimensions)) {
+            const sc = 0.7 / Math.max(sz.x, sz.y, sz.z);
+            demoModel.scale.setScalar(sc);
+          }
           const centre = new window.THREE.Vector3();
           box.getCenter(centre);
           demoModel.position.set(-centre.x * sc, -centre.y * sc, -centre.z * sc);
