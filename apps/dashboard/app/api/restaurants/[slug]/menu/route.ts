@@ -63,10 +63,27 @@ export async function GET(_req: NextRequest, { params }: Params) {
       categories: categories.map(c => ({ id: c.id, name: c.name, emoji: c.emoji })),
     }
 
-    return NextResponse.json(response)
+    const headers = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    }
+
+    return NextResponse.json(response, { headers })
   } catch {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } })
   }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  })
 }
 
 // POST /api/restaurants/[slug]/menu — add menu item (auth via middleware)

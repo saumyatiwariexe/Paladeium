@@ -131,7 +131,11 @@ export class PoseFilter {
     let q = rawQuat;
     if (this.#prevQuat !== null && this.#prevQuat.dot(q) < 0) {
       // Clone before negating so we don't mutate the caller's object
-      q = q.clone().negate();
+      q = q.clone();
+      q.x = -q.x;
+      q.y = -q.y;
+      q.z = -q.z;
+      q.w = -q.w;
     }
     this.#prevQuat = q.clone();
 
