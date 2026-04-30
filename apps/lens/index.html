@@ -1012,6 +1012,13 @@
       const repoBtn      = document.getElementById('surface-reposition-btn');
 
       // ── Surface events ────────────────────────────────────────────────────
+
+      const SOURCE_LABELS = {
+        'hit-test'  : '',
+        'depth'     : ' (depth)',
+        'projection': ' (floor est.)',
+      };
+
       surfaceDetector.addEventListener('started', () => {
         scanOverlay.classList.add('hidden');
         menuPanel.classList.add('visible');
@@ -1019,14 +1026,29 @@
         anchorStatus.classList.remove('found');
         statusText.textContent = 'Scanning surfaces…';
         if (tapHint) tapHint.classList.add('visible');
+        if (hintText) hintText.textContent = 'Move camera over a flat surface';
         if (initStatus) initStatus.textContent = '';
-        console.log('[Surface] Session active — scanning for surfaces');
+      });
+
+      surfaceDetector.addEventListener('warming', e => {
+        if (surfaceDetector.isPlaced) return;
+        const pct = Math.round(e.progress * 100);
+        statusText.textContent = `Scanning… ${pct}%`;
+      });
+
+      surfaceDetector.addEventListener('ready', () => {
+        if (surfaceDetector.isPlaced) return;
+        statusText.textContent = 'Surface locked — tap to place';
+        if (hintText) hintText.textContent = 'Tap to place dish';
       });
 
       surfaceDetector.addEventListener('surface', e => {
         if (surfaceDetector.isPlaced) return;
         if (e.found) {
-          statusText.textContent = 'Surface found — tap to place';
+          const label = SOURCE_LABELS[e.sourceMode] ?? '';
+          statusText.textContent = surfaceDetector.slamReady
+            ? `Surface locked — tap to place${label}`
+            : `Surface found${label} — tap to place`;
           if (hintText) hintText.textContent = 'Tap to place dish';
         } else {
           statusText.textContent = 'Scanning surfaces…';
@@ -1034,13 +1056,13 @@
         }
       });
 
-      surfaceDetector.addEventListener('placed', () => {
+      surfaceDetector.addEventListener('placed', e => {
         anchorStatus.classList.add('found');
-        statusText.textContent = 'Placed';
+        const label = SOURCE_LABELS[e.sourceMode] ?? '';
+        statusText.textContent = `Placed${label}`;
         if (tapHint) tapHint.classList.remove('visible');
         if (surfaceCtrl) surfaceCtrl.style.display = 'flex';
 
-        // Auto-load queued model
         if (pendingModelLoad) {
           const toLoad = pendingModelLoad;
           pendingModelLoad = null;
@@ -1049,11 +1071,19 @@
         if (uxController) uxController.showArHint();
       });
 
+      surfaceDetector.addEventListener('frozen', () => {
+        statusText.textContent = 'Tracking lost — hold still…';
+      });
+
+      surfaceDetector.addEventListener('unfrozen', () => {
+        statusText.textContent = 'Placed';
+      });
+
       surfaceDetector.addEventListener('reset', () => {
         anchorStatus.classList.remove('found');
         statusText.textContent = 'Scanning surfaces…';
         if (tapHint) tapHint.classList.add('visible');
-        if (hintText) hintText.textContent = 'Tap surface to place';
+        if (hintText) hintText.textContent = 'Move camera over a flat surface';
         if (surfaceCtrl) surfaceCtrl.style.display = 'none';
       });
 

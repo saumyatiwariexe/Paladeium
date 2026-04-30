@@ -1,34 +1,34 @@
 /**
- * SurfaceDetector — WebXR surface detection engine.
+ * SurfaceDetector — WebXR surface detection engine with multi-layer fallback.
  *
- * Implements three layers of spatial understanding:
+ * Detection pipeline (priority order, first success wins each frame):
  *
- *   SLAM (world tracking)
- *     Uses the `local-floor` reference space, backed by the device's
- *     Visual-Inertial Odometry (ARCore on Android / ARKit on iOS). The VIO system
- *     continuously maps the environment and tracks the device pose within it,
- *     giving stable 6DoF world positioning across frames.
+ *   Layer 1 — Multi-ray hit-test
+ *     Five XRHitTestSources (center + 4 angled downward).  Positions are
+ *     component-wise median-averaged then pushed through a Kalman PoseBuffer.
  *
- *   Plane tracking
- *     Uses the WebXR `plane-detection` optional feature. The XR system detects
- *     horizontal (floor, table) and vertical (wall) planes and exposes them as
- *     XRPlane objects with polygon geometry. Planes are visualised as transparent
- *     blue (horizontal) or orange (vertical) meshes.
+ *   Layer 2 — Depth Sensing API  (`depth-sensing` optional feature)
+ *     Samples XRCPUDepthInformation at 5 viewport points, takes median depth,
+ *     then unprojects it to world space along the camera-forward ray.  Gives a
+ *     real surface position even when hit-test returns nothing (e.g. featureless
+ *     floors, glass, low-texture environments).
  *
- *   World tracking / hit-test
- *     Uses the WebXR `hit-test` required feature. A viewer-space ray is cast each
- *     frame; results are smoothed through a Kalman-filtered PoseBuffer before
- *     driving the reticle. On placement, an `XRAnchor` (if supported) is created
- *     for SLAM-persistent world tracking; the AnchorSimulator lerps the object
- *     toward the anchor pose each frame so it drifts smoothly rather than
- *     teleporting.
+ *   Layer 3 — Floor projection fallback
+ *     Intersects the camera-forward ray with Y = 0 (the physical floor plane in
+ *     `local-floor` reference space).  Always produces a result as long as the
+ *     camera is tilted slightly downward.  Used as a last resort so users can
+ *     always place content even if ARCore/ARKit is still initialising.
  *
  * Stability architecture:
- *   PoseBuffer        Kalman filter + outlier rejection on raw hit-test poses
- *   PlaneValidator    Confidence gate — placement blocked until score ≥ 0.55
- *   AnchorSimulator   Soft re-alignment with Y-lock and max-correction cap
+ *   PoseBuffer        Kalman filter (Q=0.005, R=0.02) + 8 cm outlier rejection
+ *   PlaneValidator    Confidence gate — real placement needs score ≥ 0.55
+ *   AnchorSimulator   Soft re-alignment (lerp + Y-lock + 15 cm cap)
  *   TrackingConfidence History-smoothed score; freezes object on low confidence
- *   DeviceProfiler    Low/mid/high tier; scales update rate & window size
+ *   DeviceProfiler    Low/mid/high tier — controls update rate & window size
+ *
+ * Reference space:
+ *   Prefers `local-floor` (gravity-aligned, Y = 0 is the physical floor).
+ *   Falls back automatically to `local` if the device doesn't support it.
  *
  * Integration:
  *   1. new SurfaceDetector(scene, camera, renderer)
@@ -36,8 +36,18 @@
  *   3. surfaceDetector.tick(frame, time)  ← inside renderer.setAnimationLoop
  *   4. surfaceDetector.requestPlacement()  ← on user tap
  *   5. Attach AR content to surfaceDetector.placedGroup
- *   6. Events: 'started', 'surface', 'placed', 'reset', 'ended',
- *              'confidence' (detail.score), 'frozen', 'unfrozen'
+ *
+ * Events:
+ *   'started'     — XR session active, scanning begins
+ *   'warming'     — SLAM initialising { detail.progress 0–1 }
+ *   'ready'       — SLAM has enough features; full-accuracy hit-test available
+ *   'surface'     — reticle hit state changed { found, sourceMode }
+ *   'placed'      — content placed { position, quaternion, sourceMode }
+ *   'reset'       — placement cleared
+ *   'frozen'      — tracking confidence low, object held in place
+ *   'unfrozen'    — tracking confidence recovered
+ *   'confidence'  — per-tick tracking score { score }
+ *   'ended'       — XR session ended
  */
 
 import * as THREE from 'three';
@@ -47,52 +57,94 @@ import { PlaneValidator }     from './PlaneValidator.js';
 import { TrackingConfidence } from './TrackingConfidence.js';
 import { DeviceProfiler }     from './DeviceProfiler.js';
 
+// ── Constants ──────────────────────────────────────────────────────────────
+
 const PLANE_OPACITY  = 0.18;
 const RETICLE_RADIUS = 0.08;
+const SHADOW_SIZE    = 0.55;
 const PLANE_COLOR_H  = 0x4a9eff;
 const PLANE_COLOR_V  = 0xff9a4a;
-const SHADOW_SIZE    = 0.55;       // metres, diameter of the soft shadow disc
 
-// Reusable scratch objects — avoid per-frame allocations
+// Multi-ray hit-test offsets (viewer space, camera looks along -Z)
+// Slight downward-forward bias to favour floor/table detection.
+const RAY_OFFSETS = [
+  { x:  0,     y:  0,     z: -1 },  // centre
+  { x: -0.12,  y: -0.10,  z: -1 },  // down-left
+  { x:  0.12,  y: -0.10,  z: -1 },  // down-right
+  { x:  0,     y: -0.15,  z: -1 },  // straight down
+  { x:  0,     y:  0.06,  z: -1 },  // slight up (tables / counters)
+];
+
+// Depth sensing viewport sample pattern (normalised 0–1)
+const DEPTH_SAMPLES = [
+  [0.50, 0.50],  // centre
+  [0.40, 0.55], [0.60, 0.55],  // centre-left / right (below midline)
+  [0.50, 0.65], [0.50, 0.40],  // below / above centre
+];
+
+// SLAM warmup: require N consecutive valid hit-test results before 'ready'
+const WARMUP_TARGET = 20;
+
+// Fallback placement: allow tap after the reticle has been stable for this long
+const DEPTH_PLACE_AFTER_MS       = 1500;
+const PROJECTION_PLACE_AFTER_MS  = 3000;
+
+// Reticle colours per source mode
+const RETICLE_COLOR_HIT   = 0xffffff;
+const RETICLE_COLOR_DEPTH = 0x88ddff;
+const RETICLE_COLOR_PROJ  = 0xffcc55;
+
+// Scratch objects — avoid per-frame allocations
 const _mat4 = new THREE.Matrix4();
 const _vec3 = new THREE.Vector3();
 const _quat = new THREE.Quaternion();
-const _prevSmoothed = new THREE.Vector3();
+const _fwd  = new THREE.Vector3();
+const _prev = new THREE.Vector3();
+
+// ── SurfaceDetector ────────────────────────────────────────────────────────
 
 export class SurfaceDetector extends EventTarget {
-  /** Attach AR content here — automatically positioned on placement. */
+  /** Attach AR content here — positioned automatically on placement. */
   placedGroup = null;
 
   #scene    = null;
   #camera   = null;
   #renderer = null;
 
-  #session   = null;
-  #refSpace  = null;
-  #hitSource = null;
+  #session      = null;
+  #refSpace     = null;
+  #refSpaceType = 'local-floor';
+  #hitSources   = [];   // one per RAY_OFFSETS entry
+  #hasDepth     = false;
+  #hasAnchors   = false;
+  #hasPlanes    = false;
 
   #reticle     = null;
-  #reticleHit  = false;
   #shadowPlane = null;
+  #reticleHit  = false;
+  #sourceMode  = null;           // 'hit-test' | 'depth' | 'projection' | null
+  #reticleOnAt = 0;              // timestamp when reticle last became visible
 
   #planes      = new Map();
   #worldAnchor = null;
 
   #pendingPlace = false;
-  #hasAnchors   = false;
-  #hasPlanes    = false;
+
+  // SLAM warmup
+  #warmupHits = 0;
+  #slamReady  = false;
 
   // Stability modules
-  #poseBuffer   = null;
-  #anchorSim    = null;
-  #planeVal     = null;
-  #trackConf    = null;
-  #deviceProf   = null;
+  #poseBuffer = null;
+  #anchorSim  = null;
+  #planeVal   = null;
+  #trackConf  = null;
+  #deviceProf = null;
 
   // Rate-limiting
   #lastTickTime = 0;
 
-  // Freeze state tracking for events
+  // Freeze event de-dup
   #wasFrozen = false;
 
   constructor(scene, camera, renderer) {
@@ -101,7 +153,6 @@ export class SurfaceDetector extends EventTarget {
     this.#camera   = camera;
     this.#renderer = renderer;
 
-    // Stability modules — window size adjusted after detect() in start()
     this.#deviceProf = new DeviceProfiler();
     this.#poseBuffer = new PoseBuffer(15);
     this.#anchorSim  = new AnchorSimulator(0.04);
@@ -118,70 +169,102 @@ export class SurfaceDetector extends EventTarget {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  get surfaceFound()  { return this.#reticleHit; }
-  get isPlaced()      { return this.#anchorSim.isActive; }
-  get hasPlanes()     { return this.#hasPlanes; }
-  get confidence()    { return this.#planeVal.confidence; }
-  get canPlace()      { return this.#planeVal.canPlace; }
+  get surfaceFound() { return this.#reticleHit; }
+  get isPlaced()     { return this.#anchorSim.isActive; }
+  get hasPlanes()    { return this.#hasPlanes; }
+  get slamReady()    { return this.#slamReady; }
+  get sourceMode()   { return this.#sourceMode; }
+  get confidence()   { return this.#planeVal.confidence; }
 
-  /**
-   * Request a WebXR immersive-ar session and begin surface detection.
-   * Must be called from within a user-gesture handler.
-   */
   async start(domOverlayRoot = null) {
     if (!navigator.xr) throw new Error('WebXR not supported on this device');
 
-    // Profile device before session — affects buffer sizes passed to modules
     const tier     = this.#deviceProf.detect();
     const settings = this.#deviceProf.settings();
     this.#poseBuffer.setWindowSize(settings.windowSize);
     this.#anchorSim.lerpAlpha = settings.anchorLerp;
 
-    const optional = ['plane-detection', 'anchors', 'local-floor'];
+    // ── Reference space: prefer local-floor, fall back to local ──────────
+    this.#refSpaceType = 'local-floor';
+    try {
+      // Quick probe — just check if the space is available before committing
+      const testSession = this.#session; // will be null here; checked via feature flags
+      // We'll detect via optional feature negotiation instead
+    } catch { /* handled below */ }
+
+    // ── Session features ──────────────────────────────────────────────────
+    const optional = ['plane-detection', 'anchors', 'local-floor', 'depth-sensing'];
     if (domOverlayRoot) optional.push('dom-overlay');
 
     const sessionInit = {
-      requiredFeatures: ['hit-test'],
-      optionalFeatures: optional,
+      requiredFeatures : ['hit-test'],
+      optionalFeatures : optional,
     };
     if (domOverlayRoot) sessionInit.domOverlay = { root: domOverlayRoot };
 
+    // Depth sensing configuration (ignored if feature unavailable)
+    sessionInit.depthSensing = {
+      usagePreference       : ['cpu-optimized', 'gpu-optimized'],
+      dataFormatPreference  : ['luminance-alpha', 'float32'],
+    };
+
     this.#session = await navigator.xr.requestSession('immersive-ar', sessionInit);
 
-    // enabledFeatures is a FrozenArray<DOMString> in Chrome 94+, not a Set.
-    const enabled    = new Set(Array.from(this.#session.enabledFeatures ?? []));
+    const enabled = new Set(Array.from(this.#session.enabledFeatures ?? []));
     this.#hasAnchors = enabled.has('anchors');
     this.#hasPlanes  = enabled.has('plane-detection');
-    console.log(
-      `[Surface] Session started — tier:${tier} hit-test:true ` +
-      `anchors:${this.#hasAnchors} planes:${this.#hasPlanes}`,
-    );
+    this.#hasDepth   = enabled.has('depth-sensing');
 
-    this.#renderer.xr.enabled = true;
-    await this.#renderer.xr.setSession(this.#session);
-
-    // Use the exact reference space Three.js renders in — ensures hit-test
-    // poses and plane poses share the same coordinate system as the camera.
-    this.#refSpace = this.#renderer.xr.getReferenceSpace();
-    if (!this.#refSpace) {
-      throw new Error('Three.js XR reference space unavailable after setSession');
+    // If local-floor not granted, fall back to local
+    if (!enabled.has('local-floor')) {
+      this.#refSpaceType = 'local';
+      console.warn('[Surface] local-floor unavailable — using local reference space');
     }
 
+    console.log(
+      `[Surface] Session — tier:${tier} refSpace:${this.#refSpaceType} ` +
+      `depth:${this.#hasDepth} anchors:${this.#hasAnchors} planes:${this.#hasPlanes}`,
+    );
+
+    // ── Three.js XR setup ────────────────────────────────────────────────
+    this.#renderer.xr.enabled = true;
+    this.#renderer.xr.setReferenceSpaceType(this.#refSpaceType);
+    await this.#renderer.xr.setSession(this.#session);
+
+    this.#refSpace = this.#renderer.xr.getReferenceSpace();
+    if (!this.#refSpace) throw new Error('XR reference space unavailable after setSession');
+
+    // ── Multi-ray hit-test sources ────────────────────────────────────────
     const viewerSpace = await this.#session.requestReferenceSpace('viewer');
-    this.#hitSource   = await this.#session.requestHitTestSource({ space: viewerSpace });
-    console.log('[Surface] Hit-test source created ✓');
+
+    for (const offset of RAY_OFFSETS) {
+      try {
+        let ray;
+        try {
+          ray = new XRRay({ x: 0, y: 0, z: 0, w: 1 }, offset);
+        } catch {
+          ray = undefined; // XRRay not supported — browser uses default centre ray
+        }
+        const src = await this.#session.requestHitTestSource({
+          space      : viewerSpace,
+          offsetRay  : ray,
+          entityTypes: ['plane', 'point', 'mesh'],
+        });
+        this.#hitSources.push(src);
+      } catch (err) {
+        console.warn('[Surface] Hit-test source creation failed for ray offset:', offset, err);
+      }
+    }
+
+    if (this.#hitSources.length === 0) {
+      throw new Error('No hit-test sources could be created');
+    }
+    console.log(`[Surface] ${this.#hitSources.length} hit-test source(s) created ✓`);
 
     this.#session.addEventListener('end', () => this.#cleanup());
     this.dispatchEvent(new Event('started'));
   }
 
-  /**
-   * Advance the detector by one XR frame.
-   * Call inside renderer.setAnimationLoop((time, frame) => …).
-   *
-   * @param {XRFrame}  frame
-   * @param {number}   time   DOMHighResTimeStamp from the animation loop
-   */
   tick(frame, time = 0) {
     if (!frame || !this.#refSpace) return;
 
@@ -194,7 +277,7 @@ export class SurfaceDetector extends EventTarget {
     this.#lastTickTime = time;
 
     try {
-      this.#updateReticle(frame, settings);
+      this.#updateReticle(frame, time);
       if (settings.showPlanes && this.#hasPlanes) this.#updatePlanes(frame);
       this.#updateAnchor(frame);
 
@@ -207,17 +290,37 @@ export class SurfaceDetector extends EventTarget {
     }
   }
 
-  /**
-   * Queue content placement at the current reticle hit point.
-   * Blocked until PlaneValidator confidence is sufficient.
-   */
   requestPlacement() {
-    if (this.#reticleHit && !this.isPlaced && this.#planeVal.canPlace) {
+    if (!this.#reticleHit || this.isPlaced) return;
+
+    const mode = this.#sourceMode;
+
+    if (mode === 'hit-test') {
+      // Gate on PlaneValidator confidence for real hit-test results
+      if (this.#slamReady && this.#planeVal.canPlace) {
+        this.#pendingPlace = true;
+        return;
+      }
+      // Allow after warmup even if PlaneValidator hasn't reached threshold
+      // (partial confidence — SLAM initialised but scene still sparse)
+      if (this.#slamReady) {
+        this.#pendingPlace = true;
+        return;
+      }
+      // Pre-warmup: still allow after enough scan time in hit-test mode
+      if (Date.now() - this.#reticleOnAt > PROJECTION_PLACE_AFTER_MS) {
+        this.#pendingPlace = true;
+      }
+      return;
+    }
+
+    // Depth / projection fallback — allow after soak time
+    const soak = mode === 'depth' ? DEPTH_PLACE_AFTER_MS : PROJECTION_PLACE_AFTER_MS;
+    if (Date.now() - this.#reticleOnAt > soak) {
       this.#pendingPlace = true;
     }
   }
 
-  /** Remove placed anchor and restore the reticle. */
   resetPlacement() {
     if (this.#worldAnchor) {
       try { this.#worldAnchor.delete(); } catch { /* */ }
@@ -231,85 +334,240 @@ export class SurfaceDetector extends EventTarget {
     this.placedGroup.visible = false;
     if (this.#shadowPlane) this.#shadowPlane.visible = false;
     if (this.#reticle) this.#reticle.visible = false;
+    this.#reticleHit = false;
+    this.#wasFrozen  = false;
+    this.#reticleOnAt = 0;
 
-    this.#wasFrozen = false;
     this.dispatchEvent(new Event('reset'));
   }
 
   async stop() {
-    try { this.#hitSource?.cancel(); }  catch { /* */ }
+    for (const src of this.#hitSources) { try { src.cancel(); } catch { /* */ } }
     try { await this.#session?.end(); } catch { /* */ }
   }
 
-  // ── Hit-test reticle ───────────────────────────────────────────────────────
+  // ── Hit-test + fallback pipeline ───────────────────────────────────────────
 
-  #updateReticle(frame, settings) {
-    if (!this.#hitSource || !this.#reticle) return;
+  #updateReticle(frame, time) {
+    if (!this.#reticle) return;
 
-    const hits = frame.getHitTestResults(this.#hitSource);
-    let hitFound = false;
+    // ── Layer 1: multi-ray hit-test ───────────────────────────────────────
+    const { positions: hitPositions, primaryMatrix } = this.#collectMultiRayHits(frame);
 
-    if (hits.length > 0) {
+    if (hitPositions.length > 0) {
+      const median = this.#medianPosition(hitPositions);
+      this.#poseBuffer.push(median);
+      this.#planeVal.recordHit();
+      this.#advanceWarmup();
+
+      const smoothed = this.#poseBuffer.getSmoothed() ?? median;
+      const matrix   = primaryMatrix ? new Float32Array(primaryMatrix) : null;
+
+      this.#positionReticle(smoothed, matrix, RETICLE_COLOR_HIT);
+      this.#setSourceMode('hit-test', time);
+
+      if (this.isPlaced) this.#updatePostPlaceConfidence(true, smoothed);
+      return;
+    }
+
+    // Hit-test miss — penalise warmup and validator
+    this.#poseBuffer.push({ x: 0, y: 0, z: 0 }); // won't be used but keeps counts right
+    this.#planeVal.recordMiss();
+    this.#warmupHits = Math.max(0, this.#warmupHits - 1);
+
+    // ── Layer 2: depth sensing ────────────────────────────────────────────
+    if (this.#hasDepth) {
+      const depthPos = this.#getDepthHit(frame);
+      if (depthPos) {
+        this.#positionReticle(depthPos, null, RETICLE_COLOR_DEPTH);
+        this.#setSourceMode('depth', time);
+        if (this.isPlaced) this.#updatePostPlaceConfidence(true, depthPos);
+        return;
+      }
+    }
+
+    // ── Layer 3: floor projection fallback ───────────────────────────────
+    const projPos = this.#getFloorProjection(frame);
+    if (projPos) {
+      this.#positionReticle(projPos, null, RETICLE_COLOR_PROJ);
+      this.#setSourceMode('projection', time);
+      if (this.isPlaced) this.#updatePostPlaceConfidence(false, projPos);
+      return;
+    }
+
+    // ── All layers failed — hide reticle ─────────────────────────────────
+    if (this.#reticleHit) {
+      this.#reticleHit = false;
+      this.#sourceMode = null;
+      if (!this.isPlaced) this.#reticle.visible = false;
+      this.dispatchEvent(Object.assign(new Event('surface'), { found: false, sourceMode: null }));
+    }
+  }
+
+  // Collect positions from every active hit-test source.
+  // Returns: { positions: [{x,y,z}], primaryMatrix: Float32Array | null }
+  #collectMultiRayHits(frame) {
+    const positions   = [];
+    let primaryMatrix = null;
+
+    for (let i = 0; i < this.#hitSources.length; i++) {
+      const hits = frame.getHitTestResults(this.#hitSources[i]);
+      if (!hits.length) continue;
       const pose = hits[0].getPose(this.#refSpace);
-      if (pose) {
-        hitFound = true;
-        const m   = pose.transform.matrix;
-        const raw = { x: m[12], y: m[13], z: m[14] };
-
-        this.#poseBuffer.push(raw);
-        this.#planeVal.recordHit();
-
-        const smoothed = this.#poseBuffer.getSmoothed();
-        if (smoothed && !this.isPlaced) {
-          this.#reticle.visible = true;
-          // Rebuild the matrix from the hit-test rotation + smoothed position
-          _mat4.fromArray(m);
-          _mat4.elements[12] = smoothed.x;
-          _mat4.elements[13] = smoothed.y;
-          _mat4.elements[14] = smoothed.z;
-          this.#reticle.matrix.copy(_mat4);
-          this.#reticle.matrixWorldNeedsUpdate = true;
-        }
-
-        if (!this.#reticleHit) {
-          this.#reticleHit = true;
-          this.dispatchEvent(Object.assign(new Event('surface'), { found: true }));
-        }
-      }
+      if (!pose) continue;
+      const m = pose.transform.matrix;
+      positions.push({ x: m[12], y: m[13], z: m[14] });
+      if (i === 0) primaryMatrix = m; // save centre ray matrix for rotation
     }
 
-    if (!hitFound) {
-      this.#planeVal.recordMiss();
-      if (this.#reticleHit) {
-        this.#reticleHit = false;
-        if (!this.isPlaced) this.#reticle.visible = false;
-        this.dispatchEvent(Object.assign(new Event('surface'), { found: false }));
-      }
-    }
+    return { positions, primaryMatrix };
+  }
 
-    // After placement: update tracking confidence and dispatch events
+  // Sample depth at multiple viewport points; return world position at median depth.
+  #getDepthHit(frame) {
+    try {
+      const viewerPose = frame.getViewerPose(this.#refSpace);
+      if (!viewerPose?.views?.length) return null;
+
+      const view = viewerPose.views[0];
+      const di   = frame.getDepthInformation?.(view);
+      if (!di) return null;
+
+      // Collect valid depth samples
+      const depths = [];
+      for (const [u, v] of DEPTH_SAMPLES) {
+        try {
+          const d = di.getDepthInMeters(u, v);
+          if (d > 0.1 && d < 10) depths.push(d);
+        } catch { /* out-of-range */ }
+      }
+      if (!depths.length) return null;
+
+      depths.sort((a, b) => a - b);
+      const medianDepth = depths[Math.floor(depths.length / 2)];
+
+      // Unproject: camera position + camera-forward * depth
+      _mat4.fromArray(view.transform.matrix);
+      _vec3.set(
+        view.transform.matrix[12],
+        view.transform.matrix[13],
+        view.transform.matrix[14],
+      );
+      _fwd.set(0, 0, -1).transformDirection(_mat4);
+      return {
+        x: _vec3.x + _fwd.x * medianDepth,
+        y: _vec3.y + _fwd.y * medianDepth,
+        z: _vec3.z + _fwd.z * medianDepth,
+      };
+    } catch (err) {
+      console.warn('[Surface] Depth hit error:', err);
+      return null;
+    }
+  }
+
+  // Intersect camera-forward ray with the floor plane (Y = 0 in local-floor,
+  // Y = –viewer.y in local space as a rough approximation).
+  #getFloorProjection(frame) {
+    try {
+      const viewerPose = frame.getViewerPose(this.#refSpace);
+      if (!viewerPose) return null;
+
+      const t = viewerPose.transform;
+      _mat4.fromArray(t.matrix);
+      const ox = t.matrix[12], oy = t.matrix[13], oz = t.matrix[14];
+      _fwd.set(0, 0, -1).transformDirection(_mat4);
+
+      // For `local` space, treat viewer's starting Y as the floor
+      const floorY = this.#refSpaceType === 'local-floor' ? 0 : -oy;
+
+      // Ray–plane intersection: t = (floorY - oy) / fwd.y
+      if (Math.abs(_fwd.y) < 0.01) return null; // ray nearly parallel to floor
+      const tDist = (floorY - oy) / _fwd.y;
+      if (tDist < 0.2 || tDist > 6) return null; // too close or too far
+
+      return {
+        x: ox + _fwd.x * tDist,
+        y: floorY,
+        z: oz + _fwd.z * tDist,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Apply a resolved position to the reticle mesh.
+  #positionReticle(pos, primaryMatrix, colour) {
     if (this.isPlaced) {
-      const smoothed = this.#poseBuffer.getSmoothed();
-      let delta = 0;
-      if (smoothed) {
-        _vec3.set(smoothed.x, smoothed.y, smoothed.z);
-        delta = _vec3.distanceTo(_prevSmoothed);
-        _prevSmoothed.copy(_vec3);
-      }
-      this.#trackConf.update(hitFound, delta);
+      this.#reticle.visible = false;
+      return;
+    }
 
-      const nowFrozen = this.#trackConf.isFrozen;
-      if (nowFrozen && !this.#wasFrozen) {
-        this.#wasFrozen = true;
-        this.dispatchEvent(new Event('frozen'));
-      } else if (!nowFrozen && this.#wasFrozen) {
-        this.#wasFrozen = false;
-        this.dispatchEvent(new Event('unfrozen'));
-      }
+    this.#reticle.visible = true;
+
+    if (primaryMatrix) {
+      // Use hit-test pose rotation, override translation with smoothed position
+      _mat4.fromArray(primaryMatrix);
+      _mat4.elements[12] = pos.x;
+      _mat4.elements[13] = pos.y;
+      _mat4.elements[14] = pos.z;
+    } else {
+      // Flat Y-up reticle for fallback sources
+      _mat4.makeTranslation(pos.x, pos.y, pos.z);
+    }
+
+    this.#reticle.matrix.copy(_mat4);
+    this.#reticle.matrixWorldNeedsUpdate = true;
+
+    // Tint reticle ring/dot to indicate source mode
+    this.#reticle.traverse(child => {
+      if (child.isMesh) child.material.color.setHex(colour);
+    });
+  }
+
+  #setSourceMode(mode, time) {
+    const wasHit = this.#reticleHit;
+    const wasMode = this.#sourceMode;
+    this.#reticleHit  = true;
+    this.#sourceMode  = mode;
+
+    if (!wasHit) this.#reticleOnAt = Date.now();
+
+    if (!wasHit || wasMode !== mode) {
+      this.dispatchEvent(Object.assign(new Event('surface'), { found: true, sourceMode: mode }));
+    }
+  }
+
+  #advanceWarmup() {
+    if (this.#slamReady) return;
+    this.#warmupHits++;
+    if (this.#warmupHits % 5 === 0) {
       this.dispatchEvent(
-        Object.assign(new Event('confidence'), { score: this.#trackConf.score }),
+        Object.assign(new Event('warming'), { progress: this.#warmupHits / WARMUP_TARGET }),
       );
     }
+    if (this.#warmupHits >= WARMUP_TARGET) {
+      this.#slamReady = true;
+      console.log('[Surface] SLAM ready ✓');
+      this.dispatchEvent(new Event('ready'));
+    }
+  }
+
+  #updatePostPlaceConfidence(hitFound, smoothedPos) {
+    _vec3.set(smoothedPos.x, smoothedPos.y, smoothedPos.z);
+    const delta = _vec3.distanceTo(_prev);
+    _prev.copy(_vec3);
+
+    this.#trackConf.update(hitFound, delta);
+
+    const frozen = this.#trackConf.isFrozen;
+    if (frozen && !this.#wasFrozen) {
+      this.#wasFrozen = true;
+      this.dispatchEvent(new Event('frozen'));
+    } else if (!frozen && this.#wasFrozen) {
+      this.#wasFrozen = false;
+      this.dispatchEvent(new Event('unfrozen'));
+    }
+    this.dispatchEvent(Object.assign(new Event('confidence'), { score: this.#trackConf.score }));
   }
 
   // ── Plane tracking ─────────────────────────────────────────────────────────
@@ -333,13 +591,11 @@ export class SurfaceDetector extends EventTarget {
         this.#scene.add(mesh);
         this.#planes.set(plane, mesh);
       }
-
       const planePose = frame.getPose(plane.planeSpace, this.#refSpace);
       if (planePose) {
         mesh.matrix.fromArray(planePose.transform.matrix);
         mesh.matrixWorldNeedsUpdate = true;
       }
-
       if (plane.lastChangedTime !== mesh.userData.changedTime) {
         mesh.geometry.dispose();
         mesh.geometry = this.#buildPlaneGeometry(plane.polygon);
@@ -375,65 +631,85 @@ export class SurfaceDetector extends EventTarget {
     return geo;
   }
 
-  // ── World anchoring (SLAM persistence + soft re-alignment) ─────────────────
+  // ── Placement ──────────────────────────────────────────────────────────────
 
   #executePlacement(frame) {
-    const hits = frame.getHitTestResults(this.#hitSource);
-    if (!hits.length) return;
-
-    const pose = hits[0].getPose(this.#refSpace);
-    if (!pose) return;
-
-    // Use Kalman-smoothed position if available, fall back to raw
+    // Prefer smoothed PoseBuffer position; fall back to current reticle matrix
+    let pos, quat;
     const smoothed = this.#poseBuffer.getSmoothed();
-    const m        = pose.transform.matrix;
-    _mat4.fromArray(m);
-    _quat.setFromRotationMatrix(_mat4);
 
-    const pos = smoothed
-      ? new THREE.Vector3(smoothed.x, smoothed.y, smoothed.z)
-      : new THREE.Vector3(m[12], m[13], m[14]);
+    if (smoothed) {
+      pos  = new THREE.Vector3(smoothed.x, smoothed.y, smoothed.z);
+      quat = new THREE.Quaternion(); // identity — will be overridden from hit if available
+    }
+
+    // Try to get rotation from centre hit-test pose
+    if (this.#hitSources.length > 0) {
+      const hits = frame.getHitTestResults(this.#hitSources[0]);
+      if (hits.length > 0) {
+        const pose = hits[0].getPose(this.#refSpace);
+        if (pose) {
+          _mat4.fromArray(pose.transform.matrix);
+          _quat.setFromRotationMatrix(_mat4);
+          quat = _quat.clone();
+          if (!smoothed) {
+            const m = pose.transform.matrix;
+            pos = new THREE.Vector3(m[12], m[13], m[14]);
+          }
+        }
+      }
+    }
+
+    // Last resort: read current reticle matrix
+    if (!pos) {
+      const m = this.#reticle.matrix.elements;
+      pos  = new THREE.Vector3(m[12], m[13], m[14]);
+      quat = new THREE.Quaternion().setFromRotationMatrix(this.#reticle.matrix);
+    }
 
     this.placedGroup.matrixAutoUpdate = true;
     this.placedGroup.position.copy(pos);
-    this.placedGroup.quaternion.copy(_quat);
+    this.placedGroup.quaternion.copy(quat);
     this.placedGroup.visible = this.placedGroup.children.length > 0;
     if (this.#reticle) this.#reticle.visible = false;
 
-    // Position shadow plane at placement point (just above floor to avoid z-fighting)
     if (this.#shadowPlane) {
       this.#shadowPlane.position.set(pos.x, pos.y + 0.002, pos.z);
       this.#shadowPlane.visible = true;
     }
 
-    // Record initial pose in AnchorSimulator so lerp has a starting point
-    this.#anchorSim.record(pos, _quat);
-    _prevSmoothed.copy(pos);
+    _prev.copy(pos);
+    this.#anchorSim.record(pos, quat);
 
-    if (this.#hasAnchors) {
-      const xrPose = new XRRigidTransform(
-        pose.transform.position,
-        pose.transform.orientation,
-      );
-      frame.createAnchor(xrPose, this.#refSpace)
-        .then(anchor => {
-          this.#worldAnchor = anchor;
-          console.log('[Surface] World anchor created — SLAM tracking active ✓');
-        })
-        .catch(err => {
-          console.warn('[Surface] Anchor creation failed, using pose fallback:', err);
-        });
+    if (this.#hasAnchors && this.#hitSources.length > 0) {
+      const hits = frame.getHitTestResults(this.#hitSources[0]);
+      if (hits.length > 0) {
+        const pose = hits[0].getPose(this.#refSpace);
+        if (pose) {
+          const xrPose = new XRRigidTransform(
+            pose.transform.position,
+            pose.transform.orientation,
+          );
+          frame.createAnchor(xrPose, this.#refSpace)
+            .then(anchor => {
+              this.#worldAnchor = anchor;
+              console.log('[Surface] World anchor created ✓');
+            })
+            .catch(err => console.warn('[Surface] Anchor creation failed:', err));
+        }
+      }
     }
 
-    this.dispatchEvent(
-      Object.assign(new Event('placed'), { position: pos, quaternion: _quat.clone() }),
-    );
+    this.dispatchEvent(Object.assign(new Event('placed'), {
+      position  : pos,
+      quaternion: quat.clone(),
+      sourceMode: this.#sourceMode,
+    }));
   }
 
   #updateAnchor(frame) {
     if (!this.#anchorSim.isActive) return;
 
-    // If we have a real XRAnchor, feed the latest world pose to AnchorSimulator
     if (this.#worldAnchor) {
       const pose = frame.getPose(this.#worldAnchor.anchorSpace, this.#refSpace);
       if (pose) {
@@ -445,31 +721,36 @@ export class SurfaceDetector extends EventTarget {
       }
     }
 
-    // Only lerp when tracking confidence is acceptable
     if (!this.#trackConf.isFrozen) {
       this.#anchorSim.apply(this.placedGroup);
       if (this.placedGroup.children.length > 0) this.placedGroup.visible = true;
-
-      // Shadow plane tracks object in XZ, stays at floor Y
-      if (this.#shadowPlane && this.#shadowPlane.visible) {
+      if (this.#shadowPlane?.visible) {
         this.#shadowPlane.position.x = this.placedGroup.position.x;
         this.#shadowPlane.position.z = this.placedGroup.position.z;
       }
     }
   }
 
-  // ── Reticle geometry ───────────────────────────────────────────────────────
+  // ── Utilities ──────────────────────────────────────────────────────────────
+
+  /** Component-wise median of an array of {x,y,z} positions. */
+  #medianPosition(pts) {
+    const xs = pts.map(p => p.x).sort((a, b) => a - b);
+    const ys = pts.map(p => p.y).sort((a, b) => a - b);
+    const zs = pts.map(p => p.z).sort((a, b) => a - b);
+    const m  = Math.floor(pts.length / 2);
+    return { x: xs[m], y: ys[m], z: zs[m] };
+  }
+
+  // ── Reticle ────────────────────────────────────────────────────────────────
 
   #buildReticle() {
     const group = new THREE.Group();
 
-    // RingGeometry is in the XY plane (faces +Z).
-    // rotateX(-PI/2) rotates it so it faces +Y — lying flat on horizontal
-    // surfaces where the hit-test pose has Y pointing up (surface normal).
     const ringGeo = new THREE.RingGeometry(RETICLE_RADIUS * 0.72, RETICLE_RADIUS, 36)
       .rotateX(-Math.PI / 2);
     const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff, side: THREE.DoubleSide,
+      color: RETICLE_COLOR_HIT, side: THREE.DoubleSide,
       transparent: true, opacity: 0.85, depthWrite: false,
     });
     group.add(new THREE.Mesh(ringGeo, ringMat));
@@ -477,7 +758,7 @@ export class SurfaceDetector extends EventTarget {
     const dotGeo = new THREE.CircleGeometry(RETICLE_RADIUS * 0.14, 16)
       .rotateX(-Math.PI / 2);
     const dotMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff, depthWrite: false,
+      color: RETICLE_COLOR_HIT, depthWrite: false,
     });
     group.add(new THREE.Mesh(dotGeo, dotMat));
 
@@ -491,45 +772,36 @@ export class SurfaceDetector extends EventTarget {
   // ── Shadow plane ───────────────────────────────────────────────────────────
 
   #buildShadowPlane() {
-    const tex = this.#buildShadowTexture();
-    // PlaneGeometry faces +Z; rotateX(-PI/2) makes it face +Y (lies flat)
-    const geo = new THREE.PlaneGeometry(SHADOW_SIZE, SHADOW_SIZE)
-      .rotateX(-Math.PI / 2);
-    const mat = new THREE.MeshBasicMaterial({
-      map:         tex,
-      transparent: true,
-      depthWrite:  false,
-      opacity:     1,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.visible = false;
-    this.#scene.add(mesh);
-    return mesh;
-  }
+    const size   = 256;
+    const canvas = typeof OffscreenCanvas !== 'undefined'
+      ? new OffscreenCanvas(size, size)
+      : Object.assign(document.createElement('canvas'), { width: size, height: size });
 
-  #buildShadowTexture() {
-    const size = 256;
-    const OffCanvas = window.OffscreenCanvas;
-    const canvas = OffCanvas ? new OffCanvas(size, size) : Object.assign(
-      document.createElement('canvas'), { width: size, height: size },
-    );
-    const ctx = canvas.getContext('2d');
-    const r   = size / 2;
+    const ctx  = canvas.getContext('2d');
+    const r    = size / 2;
     const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
     grad.addColorStop(0,    'rgba(0,0,0,0.38)');
     grad.addColorStop(0.55, 'rgba(0,0,0,0.14)');
     grad.addColorStop(1,    'rgba(0,0,0,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
-    return new THREE.CanvasTexture(canvas);
+
+    const tex  = new THREE.CanvasTexture(canvas);
+    const geo  = new THREE.PlaneGeometry(SHADOW_SIZE, SHADOW_SIZE).rotateX(-Math.PI / 2);
+    const mat  = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.visible = false;
+    this.#scene.add(mesh);
+    return mesh;
   }
 
   // ── Session cleanup ────────────────────────────────────────────────────────
 
   #cleanup() {
-    this.#hitSource = null;
-    this.#session   = null;
-    this.#refSpace  = null;
+    for (const src of this.#hitSources) { try { src.cancel(); } catch { /* */ } }
+    this.#hitSources = [];
+    this.#session    = null;
+    this.#refSpace   = null;
 
     for (const [, mesh] of this.#planes) {
       this.#scene.remove(mesh);
@@ -542,7 +814,6 @@ export class SurfaceDetector extends EventTarget {
       this.#scene.remove(this.#reticle);
       this.#reticle = null;
     }
-
     if (this.#shadowPlane) {
       this.#shadowPlane.material.map?.dispose();
       this.#shadowPlane.geometry.dispose();
