@@ -51,7 +51,7 @@ export default function Sidebar() {
       <div className="px-5 py-4 border-t border-white/5 space-y-3">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-white/25 text-xs">v1.0 MVP</span>
+          <span className="text-white/25 text-xs">v1.0</span>
         </div>
         <button
           onClick={handleLogout}
