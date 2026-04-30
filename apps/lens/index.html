@@ -1059,7 +1059,8 @@
       surfaceDetector.addEventListener('placed', e => {
         anchorStatus.classList.add('found');
         const label = SOURCE_LABELS[e.sourceMode] ?? '';
-        statusText.textContent = `Placed${label}`;
+        const tierNote = e.tier === 'A-plane' ? ' ·surface locked' : e.tier === 'C-freeze' ? ' · frozen' : '';
+        statusText.textContent = `Placed${label}${tierNote}`;
         if (tapHint) tapHint.classList.remove('visible');
         if (surfaceCtrl) surfaceCtrl.style.display = 'flex';
 
