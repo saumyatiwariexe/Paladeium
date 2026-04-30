@@ -1078,7 +1078,7 @@
 
       // ── Animation loop ────────────────────────────────────────────────────
       renderer.setAnimationLoop((time, frame) => {
-        if (surfaceDetector) surfaceDetector.tick(frame);
+        if (surfaceDetector) surfaceDetector.tick(frame, time);
 
         if (arModel?.userData.baseY !== undefined) {
           const t = clock.getElapsedTime();
