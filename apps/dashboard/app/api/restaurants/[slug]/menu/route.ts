@@ -58,6 +58,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
         slug: restaurant.slug,
         targetsUrl: restaurant.targetsUrl ?? null,
         currency: 'INR',
+        markerDetectionEnabled: restaurant.markerDetectionEnabled ?? true,
       },
       menu,
       categories: categories.map(c => ({ id: c.id, name: c.name, emoji: c.emoji })),

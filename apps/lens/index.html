@@ -355,6 +355,52 @@
     #no-anchor-msg p { line-height: 1.5; }
     #no-anchor-msg strong { color: var(--gold); }
 
+    /* ─── Surface Mode ─── */
+    #surface-controls {
+      position: fixed; bottom: 380px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 45;
+      display: none;
+      gap: 10px;
+      align-items: center;
+    }
+    #surface-reposition-btn {
+      background: rgba(10,10,20,0.82);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 10px 22px;
+      font-size: 13px; font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    #surface-reposition-btn:active { transform: scale(0.96); }
+
+    #surface-tap-hint {
+      position: fixed; bottom: 380px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 45;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 10px 22px;
+      font-size: 13px; font-weight: 500;
+      color: var(--text);
+      display: none;
+      align-items: center; gap: 8px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    #surface-tap-hint.visible { display: flex; }
+    .tap-pulse {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--gold);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
     /* ─── Loading Spinner ─── */
     #model-loading {
       position: fixed; top: 50%; left: 50%;
@@ -401,7 +447,7 @@
       <div class="c4"></div>
     </div>
     <h2>AR Menu</h2>
-    <p>Point your camera at the menu card to see dishes in 3D</p>
+    <p id="scan-overlay-desc">Point your camera at the menu card to see dishes in 3D</p>
     <button id="start-ar-btn" onclick="handleStartAR()">Tap to Start AR</button>
     <div id="ar-init-status"></div>
   </div>
@@ -417,6 +463,15 @@
       </svg>
     </div>
     <p>Point at the <strong>menu card</strong> first so the dish appears in AR</p>
+  </div>
+
+  <!-- Surface mode: tap hint + reposition -->
+  <div id="surface-tap-hint">
+    <div class="tap-pulse"></div>
+    <span id="surface-hint-text">Tap surface to place</span>
+  </div>
+  <div id="surface-controls">
+    <button id="surface-reposition-btn" onclick="repositionSurface()">Reposition</button>
   </div>
 
   <!-- Model loading spinner -->
@@ -475,8 +530,16 @@
     let activeCategory = 'all';
     let arStarted      = false;
 
+    // 'marker' | 'surface' | 'demo' | null
+    let arMode = null;
+
+    // true  = MindAR image-marker tracking (default)
+    // false = WebXR surface detection (SLAM + planes + hit-test)
+    let markerDetectionEnabled = true;
+
     // Set by startAR() — used by loadArModel and demo mode
     let uxController      = null;   // UXController instance  (AR mode)
+    let surfaceDetector   = null;   // SurfaceDetector instance (surface mode)
     let currentSlug       = null;   // Active restaurant slug (e.g. 'the-grand-spice')
     let pendingModelLoad  = null;   // model filename to load once tracking locks
 
@@ -553,6 +616,11 @@
             }
             if (data.restaurant?.name) document.title = `${data.restaurant.name} — AR Menu`;
             if (data.restaurant?.targetsUrl) TARGETS_SRC = data.restaurant.targetsUrl;
+            if (data.restaurant?.markerDetectionEnabled === false) {
+              markerDetectionEnabled = false;
+              const desc = document.getElementById('scan-overlay-desc');
+              if (desc) desc.textContent = 'Tap a flat surface to place dishes in 3D';
+            }
             if (Array.isArray(data.categories) && data.categories.length) {
               renderCategories(data.categories);
             }
@@ -598,7 +666,22 @@
         return;
       }
 
-      // States where tracking is established enough to place the model
+      // ── Surface mode ──────────────────────────────────────────────────────
+      if (arMode === 'surface') {
+        if (!surfaceDetector?.isPlaced) {
+          pendingModelLoad = dish.model;
+          const hint = document.getElementById('surface-hint-text');
+          if (hint) hint.textContent = 'Tap surface to place dish';
+          const tapHint = document.getElementById('surface-tap-hint');
+          if (tapHint) tapHint.classList.add('visible');
+          return;
+        }
+        pendingModelLoad = null;
+        loadArModel(dish.model);
+        return;
+      }
+
+      // ── Marker mode ───────────────────────────────────────────────────────
       const READY_STATES = ['locked', 'predicted', 'relocalizing'];
       const arActive = trackingEngine && READY_STATES.includes(trackingEngine.state);
 
@@ -623,7 +706,8 @@
     // ─────────────────────────────────────────────────────────────────────────
     function clearArModel() {
       if (arModel) {
-        if (trackingEngine) trackingEngine.innerGroup.remove(arModel);
+        if (arMode === 'marker' && trackingEngine) trackingEngine.innerGroup.remove(arModel);
+        else if (arMode === 'surface' && surfaceDetector) surfaceDetector.placedGroup.remove(arModel);
         else if (typeof demoScene !== 'undefined' && demoScene) demoScene.remove(arModel);
       }
       arModel = null;
@@ -671,12 +755,15 @@
           // Flip 180° so the model faces the camera (GLTF +Z → towards viewer)
           arModel.rotation.y = Math.PI;
 
-          // Attach to the engine-managed group and immediately make it visible
-          if (trackingEngine) {
+          // Attach to the appropriate group based on active AR mode
+          if (arMode === 'marker' && trackingEngine) {
             trackingEngine.innerGroup.add(arModel);
             // CRITICAL: force managedGroup visible right away so the model
             // appears even if tick() hasn't run since the model loaded.
             trackingEngine.managedGroup.visible = true;
+          } else if (arMode === 'surface' && surfaceDetector) {
+            surfaceDetector.placedGroup.add(arModel);
+            if (surfaceDetector.isPlaced) surfaceDetector.placedGroup.visible = true;
           }
 
           if (uxController) uxController.showArHint();
@@ -825,6 +912,8 @@
       dlFill.position.set(-2, 1, -1);
       scene.add(dlFill);
 
+      arMode = 'marker';
+
       // Create and initialise the tracking engine
       trackingEngine = new TrackingEngine(scene);
       const caps     = await trackingEngine.init();
@@ -879,6 +968,136 @@
       scanOverlay.classList.add('scanning-mode');
       document.getElementById('start-ar-btn').style.display = 'none';
       if (initStatus) initStatus.textContent = 'Point camera at the menu card';
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SURFACE AR — WebXR SLAM + plane tracking + world tracking
+    // ─────────────────────────────────────────────────────────────────────────
+    async function startSurfaceAR() {
+      const initStatus = document.getElementById('ar-init-status');
+
+      const [{ SurfaceDetector }, { UXController }] = await Promise.all([
+        import('./js/SurfaceDetector.js'),
+        import('./js/UXController.js'),
+      ]);
+
+      // Build a standalone Three.js scene (no MindAR)
+      const scene    = new window.THREE.Scene();
+      const camera   = new window.THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 100);
+      const renderer = new window.THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(devicePixelRatio);
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.xr.enabled = true;
+
+      const container = document.getElementById('ar-container');
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+
+      // Lighting — matches marker mode
+      scene.add(new window.THREE.AmbientLight(0xffffff, 1.4));
+      const dlKey = new window.THREE.DirectionalLight(0xfff5e0, 2.2);
+      dlKey.position.set(1, 3, 2);
+      scene.add(dlKey);
+      const dlFill = new window.THREE.DirectionalLight(0xd4a853, 0.8);
+      dlFill.position.set(-2, 1, -1);
+      scene.add(dlFill);
+
+      arMode          = 'surface';
+      surfaceDetector = new SurfaceDetector(scene, camera, renderer);
+      uxController    = new UXController();
+
+      const tapHint      = document.getElementById('surface-tap-hint');
+      const hintText     = document.getElementById('surface-hint-text');
+      const surfaceCtrl  = document.getElementById('surface-controls');
+      const repoBtn      = document.getElementById('surface-reposition-btn');
+
+      // ── Surface events ────────────────────────────────────────────────────
+      surfaceDetector.addEventListener('started', () => {
+        scanOverlay.classList.add('hidden');
+        menuPanel.classList.add('visible');
+        menuPanel.classList.remove('minimized');
+        anchorStatus.classList.remove('found');
+        statusText.textContent = 'Scanning surfaces…';
+        if (tapHint) tapHint.classList.add('visible');
+        if (initStatus) initStatus.textContent = '';
+        console.log('[Surface] Session active — scanning for surfaces');
+      });
+
+      surfaceDetector.addEventListener('surface', e => {
+        if (surfaceDetector.isPlaced) return;
+        if (e.found) {
+          statusText.textContent = 'Surface found — tap to place';
+          if (hintText) hintText.textContent = 'Tap to place dish';
+        } else {
+          statusText.textContent = 'Scanning surfaces…';
+          if (hintText) hintText.textContent = 'Move camera over a flat surface';
+        }
+      });
+
+      surfaceDetector.addEventListener('placed', () => {
+        anchorStatus.classList.add('found');
+        statusText.textContent = 'Placed';
+        if (tapHint) tapHint.classList.remove('visible');
+        if (surfaceCtrl) surfaceCtrl.style.display = 'flex';
+
+        // Auto-load queued model
+        if (pendingModelLoad) {
+          const toLoad = pendingModelLoad;
+          pendingModelLoad = null;
+          loadArModel(toLoad);
+        }
+        if (uxController) uxController.showArHint();
+      });
+
+      surfaceDetector.addEventListener('reset', () => {
+        anchorStatus.classList.remove('found');
+        statusText.textContent = 'Scanning surfaces…';
+        if (tapHint) tapHint.classList.add('visible');
+        if (hintText) hintText.textContent = 'Tap surface to place';
+        if (surfaceCtrl) surfaceCtrl.style.display = 'none';
+      });
+
+      surfaceDetector.addEventListener('ended', () => {
+        arMode = null;
+        surfaceDetector = null;
+      });
+
+      // Tap on the renderer canvas to place content
+      renderer.domElement.addEventListener('click', () => {
+        if (surfaceDetector && !surfaceDetector.isPlaced) {
+          surfaceDetector.requestPlacement();
+        }
+      });
+
+      // Resize
+      window.addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+      });
+
+      // ── Animation loop ────────────────────────────────────────────────────
+      renderer.setAnimationLoop((time, frame) => {
+        if (surfaceDetector) surfaceDetector.tick(frame);
+
+        if (arModel?.userData.baseY !== undefined) {
+          const t = clock.getElapsedTime();
+          arModel.position.y = arModel.userData.baseY + Math.sin(t * 1.2) * 0.006;
+        }
+
+        renderer.render(scene, camera);
+      });
+
+      // Start XR session — pass document.body as dom-overlay root so HTML UI
+      // is rendered on top of the camera feed
+      if (initStatus) initStatus.textContent = 'Requesting XR session…';
+      await surfaceDetector.start(document.body);
+    }
+
+    function repositionSurface() {
+      if (!surfaceDetector) return;
+      clearArModel();
+      surfaceDetector.resetPlacement();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1072,6 +1291,39 @@
         return;
       }
 
+      // ── Surface mode (WebXR SLAM + plane detection) ───────────────────────
+      if (!markerDetectionEnabled) {
+        status.textContent = 'Checking WebXR support…';
+        const hasXR = 'xr' in navigator &&
+          await navigator.xr.isSessionSupported('immersive-ar').catch(() => false);
+
+        if (!hasXR) {
+          alert('Surface AR requires a WebXR-capable device (ARCore on Android, ARKit on iOS 15.4+).\n\nFalling back to preview mode.');
+          showDemoMode();
+          return;
+        }
+
+        status.textContent = 'Loading 3D engine…';
+        try {
+          await getThreeLibs();
+        } catch (err) {
+          alert('Failed to load 3D libraries: ' + err.message + '\n\nFalling back to preview mode.');
+          showDemoMode();
+          return;
+        }
+
+        status.textContent = 'Starting surface detection…';
+        try {
+          await startSurfaceAR();
+        } catch (err) {
+          console.error('[Surface] startSurfaceAR failed:', err);
+          alert('Surface AR failed: ' + err.message + '\n\nFalling back to preview mode.');
+          showDemoMode();
+        }
+        return;
+      }
+
+      // ── Marker mode (MindAR image tracking) ──────────────────────────────
       // Load Three.js + MindAR
       status.textContent = 'Loading AR libraries…';
       try {
@@ -1104,8 +1356,9 @@
     }
 
     // Expose to HTML event handlers
-    window.handleStartAR = handleStartAR;
-    window.selectDish    = selectDish;
+    window.handleStartAR      = handleStartAR;
+    window.selectDish         = selectDish;
+    window.repositionSurface  = repositionSurface;
   </script>
 </body>
 </html>

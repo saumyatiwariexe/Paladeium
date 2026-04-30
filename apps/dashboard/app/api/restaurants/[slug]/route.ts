@@ -5,11 +5,12 @@ import { readDb, writeDb } from '@/lib/db'
 type Params = { params: { slug: string } }
 
 const RestaurantUpdateSchema = z.object({
-  name:       z.string().min(1).max(100).trim().optional(),
-  description:z.string().max(500).optional(),
-  status:     z.enum(['active', 'inactive', 'pending', 'pendingDeletion']).optional(),
-  targetsUrl: z.string().url().nullable().optional(),
-  deleteAt:   z.string().nullable().optional(),
+  name:                   z.string().min(1).max(100).trim().optional(),
+  description:            z.string().max(500).optional(),
+  status:                 z.enum(['active', 'inactive', 'pending', 'pendingDeletion']).optional(),
+  targetsUrl:             z.string().url().nullable().optional(),
+  markerDetectionEnabled: z.boolean().optional(),
+  deleteAt:               z.string().nullable().optional(),
 }).strict()
 
 export async function GET(_req: NextRequest, { params }: Params) {

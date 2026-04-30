@@ -1,7 +1,7 @@
 /**
  * CapabilityDetector — probes the browser/device and assigns a tracking tier.
  *
- * Tier 1 – WebXR immersive-ar  (ARCore / ARKit via browser)
+ * Tier 1 – WebXR immersive-ar  (ARCore / ARKit via browser — SLAM + plane + hit-test)
  * Tier 2 – Marker + device-orientation sensor fusion
  * Tier 3 – Marker tracking only (no orientation sensors)
  * Tier 4 – No camera → 3D-viewer fallback
@@ -25,6 +25,11 @@ export class CapabilityDetector {
       catch { /* unsupported */ }
     }
 
+    // hit-test is available on all immersive-ar capable browsers (ARCore/ARKit).
+    // Individual feature support is confirmed at session-request time via
+    // enabledFeatures; we set this flag as the pre-flight best-guess.
+    const hasHitTest = hasImmersiveAR;
+
     const hasDeviceOrientation = typeof DeviceOrientationEvent !== 'undefined';
     const hasDeviceMotion      = typeof DeviceMotionEvent      !== 'undefined';
     const hasSensors           = hasDeviceOrientation && hasDeviceMotion;
@@ -38,16 +43,17 @@ export class CapabilityDetector {
       isIOS && typeof DeviceOrientationEvent.requestPermission === 'function';
 
     let tier;
-    if (!hasCamera)        tier = CapabilityTier.VIEWER;
-    else if (hasImmersiveAR) tier = CapabilityTier.WEBXR;   // stub – tier 1 not yet wired
-    else if (hasSensors)   tier = CapabilityTier.HYBRID;
-    else                   tier = CapabilityTier.MARKER;
+    if (!hasCamera)          tier = CapabilityTier.VIEWER;
+    else if (hasImmersiveAR) tier = CapabilityTier.WEBXR;
+    else if (hasSensors)     tier = CapabilityTier.HYBRID;
+    else                     tier = CapabilityTier.MARKER;
 
     return Object.freeze({
       tier,
       hasCamera,
       hasWebXR,
       hasImmersiveAR,
+      hasHitTest,
       hasDeviceOrientation,
       hasDeviceMotion,
       hasSensors,

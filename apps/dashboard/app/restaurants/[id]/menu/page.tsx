@@ -5,6 +5,7 @@ import { Target, ExternalLink, Plus, Utensils } from 'lucide-react'
 import CopyButton from './CopyButton'
 import DeleteItemButton from './DeleteItemButton'
 import ToggleAvailableButton from './ToggleAvailableButton'
+import ToggleMarkerDetectionButton from './ToggleMarkerDetectionButton'
 
 const LENS_URL = process.env.LENS_URL ?? 'http://localhost:3001'
 
@@ -61,6 +62,10 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <ToggleMarkerDetectionButton
+            restaurantSlug={restaurant.slug}
+            enabled={restaurant.markerDetectionEnabled ?? true}
+          />
           <Link
             href={`/restaurants/${params.id}/marker`}
             className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-white/5 text-white/50 hover:text-white/80 hover:bg-white/[0.08] transition-colors border border-white/10"
