@@ -62,22 +62,56 @@
       height: 100% !important;
     }
 
-    /* ─── Invisible Tap-to-Start ─── */
-    #invisible-start-overlay {
+    /* ─── Engine Loader (Automated Feel) ─── */
+    #engine-loader {
       position: fixed; inset: 0; z-index: 100;
-      display: flex; align-items: center; justify-content: center;
       background: var(--dark);
-      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      transition: opacity 0.5s ease;
     }
-    #invisible-start-overlay.hidden {
-      display: none;
+    #engine-loader.hidden {
+      opacity: 0; pointer-events: none;
     }
-    .start-prompt {
-      color: var(--text);
-      font-size: 16px;
-      font-weight: 500;
-      animation: pulse 2.5s infinite;
+    .cube-wrapper {
+      width: 60px; height: 60px;
+      perspective: 800px;
+      margin-bottom: 30px;
     }
+    .cube {
+      width: 100%; height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      animation: spin-cube 3s infinite linear;
+    }
+    .cube-face {
+      position: absolute; width: 60px; height: 60px;
+      border: 2px solid var(--gold);
+      background: rgba(212, 168, 83, 0.1);
+      box-shadow: 0 0 15px rgba(212, 168, 83, 0.4) inset;
+    }
+    .cube-face.front  { transform: rotateY(  0deg) translateZ(30px); }
+    .cube-face.right  { transform: rotateY( 90deg) translateZ(30px); }
+    .cube-face.back   { transform: rotateY(180deg) translateZ(30px); }
+    .cube-face.left   { transform: rotateY(-90deg) translateZ(30px); }
+    .cube-face.top    { transform: rotateX( 90deg) translateZ(30px); }
+    .cube-face.bottom { transform: rotateX(-90deg) translateZ(30px); }
+    @keyframes spin-cube {
+      0% { transform: rotateX(-20deg) rotateY(0deg); }
+      100% { transform: rotateX(-20deg) rotateY(360deg); }
+    }
+    .engine-text {
+      color: var(--text); font-size: 16px; font-weight: 500; letter-spacing: 1px;
+      margin-bottom: 20px;
+    }
+    .engine-btn {
+      background: var(--gold); color: var(--dark);
+      border: none; padding: 12px 30px; border-radius: 30px;
+      font-size: 15px; font-weight: 700; cursor: pointer;
+      box-shadow: 0 4px 20px rgba(212, 168, 83, 0.4);
+      transition: transform 0.2s;
+    }
+    .engine-btn:active { transform: scale(0.95); }
+    .engine-btn.hidden { display: none; }
     
     /* ─── Info Card ─── */
     #info-card {
@@ -388,14 +422,13 @@
     #model-loading.visible { opacity: 1; }
     
     .skeleton-card {
-      background: rgba(10, 10, 20, 0.6);
-      backdrop-filter: blur(12px);
+      background: rgba(10, 10, 20, 0.85);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 20px;
       width: 220px;
       display: flex; flex-direction: column; gap: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
     }
     .skeleton-image {
       width: 100%; height: 120px;
@@ -461,9 +494,20 @@
     </div>
   </div>
 
-  <!-- Invisible tap-to-start -->
-  <div id="invisible-start-overlay">
-    <div class="start-prompt">Tap to launch AR Menu</div>
+  <!-- Engine Loader -->
+  <div id="engine-loader">
+    <div class="cube-wrapper">
+      <div class="cube">
+        <div class="cube-face front"></div>
+        <div class="cube-face back"></div>
+        <div class="cube-face right"></div>
+        <div class="cube-face left"></div>
+        <div class="cube-face top"></div>
+        <div class="cube-face bottom"></div>
+      </div>
+    </div>
+    <div class="engine-text" id="engine-status">Ready to Launch</div>
+    <button class="engine-btn" id="start-engine-btn">Enter AR Menu</button>
   </div>
 
   <!-- No-anchor prompt -->
@@ -581,19 +625,23 @@
     async function init() {
       await fetchMenu();
 
-      const startOverlay = document.getElementById('invisible-start-overlay');
-      startOverlay.addEventListener('click', async () => {
-        startOverlay.classList.add('hidden');
+      const loader = document.getElementById('engine-loader');
+      const btn = document.getElementById('start-engine-btn');
+      const statusText = document.getElementById('engine-status');
+      
+      btn.addEventListener('click', async () => {
+        btn.classList.add('hidden');
+        statusText.textContent = 'Initialising 3D Engine...';
         
         try {
-          document.getElementById('status-text').textContent = 'Initialising AR...';
           const arManager = new ARSessionManager();
           await arManager.start();
+          loader.classList.add('hidden');
         } catch (e) {
           console.error(e);
           alert('Failed to start AR: ' + e.message);
-          startOverlay.classList.remove('hidden');
-          startOverlay.querySelector('.start-prompt').textContent = 'AR Failed. Tap to try again.';
+          btn.classList.remove('hidden');
+          statusText.textContent = 'AR Failed. Try again.';
         }
       });
     }

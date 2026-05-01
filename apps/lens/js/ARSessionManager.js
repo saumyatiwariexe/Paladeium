@@ -40,22 +40,22 @@ export class ARSessionManager {
 
     this.gestureController = new GestureController(this.renderer.domElement, {
       onSwipeLeft: () => {
+        if (this.isTutorialVisible) return;
         if (State.menuItems.length === 0) return;
         const next = (State.currentDishIndex + 1) % State.menuItems.length;
         this.dishManager.switchDish(next, 1);
         this.uiController.showInfoCard();
-        this.dismissTutorial();
       },
       onSwipeRight: () => {
+        if (this.isTutorialVisible) return;
         if (State.menuItems.length === 0) return;
         const prev = (State.currentDishIndex - 1 + State.menuItems.length) % State.menuItems.length;
         this.dishManager.switchDish(prev, -1);
         this.uiController.showInfoCard();
-        this.dismissTutorial();
       },
       onSwipeUp: () => {
+        if (this.isTutorialVisible) return;
         setState({ isMenuOpen: true });
-        this.dismissTutorial();
       },
       onSwipeDown: () => {
         setState({ isMenuOpen: false });
@@ -82,12 +82,22 @@ export class ARSessionManager {
     this.bindEvents();
   }
 
+  showTutorial() {
+    this.isTutorialVisible = true;
+    const tut = document.getElementById('tutorial-overlay');
+    if (tut) tut.classList.add('visible');
+    
+    // Auto hide after 4 seconds
+    setTimeout(() => {
+      this.dismissTutorial();
+    }, 4000);
+  }
+
   dismissTutorial() {
-    if (!localStorage.getItem('paladeium_tutorial_seen')) {
-      localStorage.setItem('paladeium_tutorial_seen', 'true');
-      const tut = document.getElementById('tutorial-overlay');
-      if (tut) tut.classList.remove('visible');
-    }
+    this.isTutorialVisible = false;
+    localStorage.setItem('paladeium_tutorial_seen', 'true');
+    const tut = document.getElementById('tutorial-overlay');
+    if (tut) tut.classList.remove('visible');
   }
 
   setupLighting() {
@@ -109,9 +119,8 @@ export class ARSessionManager {
 
     this.surfaceDetector.addEventListener('surface', e => {
       if (e.found && !this.surfaceDetector.isPlaced && State.menuItems.length > 0) {
-        if (this.surfaceDetector.confidence > 0.6 || this.surfaceDetector.slamReady) {
-          this.surfaceDetector.requestPlacement();
-        }
+        // Place instantly upon first surface detection
+        this.surfaceDetector.requestPlacement();
       }
     });
 
@@ -121,8 +130,7 @@ export class ARSessionManager {
         this.dishManager.switchDish(0, 0);
       }
       if (!localStorage.getItem('paladeium_tutorial_seen')) {
-        const tut = document.getElementById('tutorial-overlay');
-        if (tut) tut.classList.add('visible');
+        this.showTutorial();
       }
     });
   }
