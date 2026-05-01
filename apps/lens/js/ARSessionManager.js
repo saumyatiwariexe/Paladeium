@@ -44,15 +44,22 @@ export class ARSessionManager {
         const next = (State.currentDishIndex + 1) % State.menuItems.length;
         this.dishManager.switchDish(next, 1);
         this.uiController.showInfoCard();
+        this.dismissTutorial();
       },
       onSwipeRight: () => {
         if (State.menuItems.length === 0) return;
         const prev = (State.currentDishIndex - 1 + State.menuItems.length) % State.menuItems.length;
         this.dishManager.switchDish(prev, -1);
         this.uiController.showInfoCard();
+        this.dismissTutorial();
       },
-      onSwipeUp: () => setState({ isMenuOpen: true }),
-      onSwipeDown: () => setState({ isMenuOpen: false }),
+      onSwipeUp: () => {
+        setState({ isMenuOpen: true });
+        this.dismissTutorial();
+      },
+      onSwipeDown: () => {
+        setState({ isMenuOpen: false });
+      },
       onTap: () => {
         if (!this.surfaceDetector.isPlaced) {
           this.surfaceDetector.requestPlacement();
@@ -75,6 +82,14 @@ export class ARSessionManager {
     this.bindEvents();
   }
 
+  dismissTutorial() {
+    if (!localStorage.getItem('paladeium_tutorial_seen')) {
+      localStorage.setItem('paladeium_tutorial_seen', 'true');
+      const tut = document.getElementById('tutorial-overlay');
+      if (tut) tut.classList.remove('visible');
+    }
+  }
+
   setupLighting() {
     this.scene.add(new THREE.AmbientLight(0xffffff, 1.4));
     const dlKey = new THREE.DirectionalLight(0xfff5e0, 2.2);
@@ -94,9 +109,6 @@ export class ARSessionManager {
 
     this.surfaceDetector.addEventListener('surface', e => {
       if (e.found && !this.surfaceDetector.isPlaced && State.menuItems.length > 0) {
-        // Automatically place the FIRST dish from the menu as soon as a valid surface is detected
-        // Note: The SurfaceDetector needs a requestPlacement call. 
-        // We will call it after a short delay to ensure stability if TrackingConfidence is high
         if (this.surfaceDetector.confidence > 0.6 || this.surfaceDetector.slamReady) {
           this.surfaceDetector.requestPlacement();
         }
@@ -106,8 +118,11 @@ export class ARSessionManager {
     this.surfaceDetector.addEventListener('placed', () => {
       setState({ anchorPlaced: true });
       if (State.menuItems.length > 0) {
-        // Switch to the first dish
         this.dishManager.switchDish(0, 0);
+      }
+      if (!localStorage.getItem('paladeium_tutorial_seen')) {
+        const tut = document.getElementById('tutorial-overlay');
+        if (tut) tut.classList.add('visible');
       }
     });
   }

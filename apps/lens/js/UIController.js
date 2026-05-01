@@ -38,9 +38,12 @@ export class UIController {
       if (state.isMenuOpen) {
         this.bottomSheet.classList.add('visible');
         this.bottomSheet.classList.remove('minimized');
+        setState({ showInfoCard: false });
       } else {
         this.bottomSheet.classList.add('minimized');
         this.bottomSheet.classList.remove('visible');
+        // If an AR dish is active, show the info card again
+        if (state.activeDishId) setState({ showInfoCard: true });
       }
     }
 
@@ -59,7 +62,7 @@ export class UIController {
 
     // Info card visibility
     if (this.infoCard) {
-      if (state.showInfoCard && state.menuItems.length > 0) {
+      if (state.showInfoCard && !state.isMenuOpen && state.menuItems.length > 0) {
         const dish = state.menuItems[state.currentDishIndex];
         if (dish) {
           this.infoCard.querySelector('.info-name').textContent = dish.name;
@@ -107,10 +110,5 @@ export class UIController {
 
   showInfoCard() {
     setState({ showInfoCard: true });
-    // Auto hide after 5 seconds
-    clearTimeout(this.infoTimeout);
-    this.infoTimeout = setTimeout(() => {
-      setState({ showInfoCard: false });
-    }, 5000);
   }
 }
