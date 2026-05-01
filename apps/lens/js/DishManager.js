@@ -86,21 +86,19 @@ export class DishManager {
       this.placedGroup.remove(this.currentModel);
     }
     this.currentModel = model;
-    this.currentModel.scale.setScalar(this.currentModel.scale.x * 0.9); // Start slightly scaled down
+    const canon = model.userData.canonicalScale ?? model.scale.x;
+    this.currentModel.scale.setScalar(canon * 0.9);
     this.placedGroup.add(this.currentModel);
     this.placedGroup.visible = true;
-    
-    // Scale up animation
     this.animateScaleIn(this.currentModel);
   }
 
-  animateTransition(oldModel, newModel, dir) {
-    // Basic transition: immediately swap, then scale up
-    // Ideally we would use GSAP or TWEEN, but here we can just use requestAnimationFrame
+  animateTransition(oldModel, newModel, _dir) {
     this.placedGroup.remove(oldModel);
     if (newModel) {
       this.currentModel = newModel;
-      this.currentModel.scale.setScalar(this.currentModel.scale.x * 0.9);
+      const canon = newModel.userData.canonicalScale ?? newModel.scale.x;
+      this.currentModel.scale.setScalar(canon * 0.9);
       this.placedGroup.add(this.currentModel);
       this.animateScaleIn(this.currentModel);
     } else {
@@ -109,15 +107,13 @@ export class DishManager {
   }
 
   animateScaleIn(model) {
-    let start = performance.now();
-    const duration = 300;
-    const targetScale = model.scale.x / 0.9;
+    const targetScale  = model.userData.canonicalScale ?? (model.scale.x / 0.9);
     const initialScale = model.scale.x;
+    const start        = performance.now();
+    const duration     = 300;
 
     const tick = (now) => {
-      const elapsed = now - start;
-      const t = Math.min(elapsed / duration, 1);
-      // easeOutCubic
+      const t    = Math.min((now - start) / duration, 1);
       const ease = 1 - Math.pow(1 - t, 3);
       model.scale.setScalar(initialScale + (targetScale - initialScale) * ease);
       if (t < 1) requestAnimationFrame(tick);

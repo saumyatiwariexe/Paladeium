@@ -93,9 +93,9 @@ const FREEZE_MS       = 1800;   // freeze after placement so anchor can stabilis
 const ANCHOR_NOISE_M  = 0.001;  // 1 mm — skip imperceptibly small updates
 const JUMP_M          = 0.04;   // 4 cm — animate instead of snap
 const JUMP_MS         = 550;    // cubic-ease-out duration for large corrections
-const ANCHOR_RETRY_N  = 14;     // max anchor creation attempts
-const ANCHOR_RETRY_MS = 1000;   // ms between retries
-const PLANE_SEARCH_R  = 0.30;   // metres — search for nearest plane within this radius
+const ANCHOR_RETRY_N  = 20;     // max anchor creation attempts
+const ANCHOR_RETRY_MS = 500;    // ms between retries
+const PLANE_SEARCH_R  = 0.50;   // metres — search for nearest plane within this radius
 
 // Reticle tint per source
 const COL_HIT   = 0xffffff;
@@ -161,7 +161,7 @@ export class SurfaceDetector extends EventTarget {
   #jumpFrom    = new THREE.Vector3();
   #jumpTo      = new THREE.Vector3();
   #jumpStartMs = 0;
-  #jumpMat     = null;  // anchor matrix to apply after jump completes
+  #jumpQuat    = null;  // anchor orientation to apply after jump completes
 
   // Planes display
   #planes = new Map();
@@ -662,7 +662,7 @@ export class SurfaceDetector extends EventTarget {
     this.#syncShadow();
   }
 
-  // Tier B — drive directly from XRAnchor matrix (no lerp).
+  // Tier B — drive from XRAnchor position/orientation (no raw matrix write).
   #updateFromAnchor(frame) {
     if (this.#jumpActive) return;
     if (performance.now() < this.#anchorSettleEnd) return;
@@ -670,8 +670,8 @@ export class SurfaceDetector extends EventTarget {
     const pose = frame.getPose(this.#worldAnchor.anchorSpace, this.#refSpace);
     if (!pose) return;
 
-    const m = pose.transform.matrix;
-    _v3.set(m[12], m[13], m[14]);
+    const p = pose.transform.position;
+    _v3.set(p.x, p.y, p.z);
     const delta = _v3.distanceTo(this.#lastPos);
 
     if (delta < ANCHOR_NOISE_M) {
@@ -682,12 +682,12 @@ export class SurfaceDetector extends EventTarget {
     this.#lastPos.copy(_v3);
 
     if (delta > JUMP_M) {
-      this.#startJump(_v3, m);
+      this.#startJump(_v3, pose.transform.orientation);
     } else {
-      // Write anchor matrix directly — SLAM already corrected this value
-      this.placedGroup.matrixAutoUpdate = false;
-      this.placedGroup.matrix.fromArray(m);
-      this.placedGroup.matrixWorldNeedsUpdate = true;
+      const o = pose.transform.orientation;
+      this.placedGroup.matrixAutoUpdate = true;
+      this.placedGroup.position.set(p.x, p.y, p.z);
+      this.placedGroup.quaternion.set(o.x, o.y, o.z, o.w);
     }
 
     if (this.placedGroup.children.length > 0) this.placedGroup.visible = true;
@@ -696,17 +696,10 @@ export class SurfaceDetector extends EventTarget {
 
   // ── Jump animation helpers ─────────────────────────────────────────────
 
-  #startJump(targetPos, anchorMatrix) {
-    const cur = this.placedGroup.matrixAutoUpdate
-      ? this.placedGroup.position
-      : new THREE.Vector3(
-          this.placedGroup.matrix.elements[12],
-          this.placedGroup.matrix.elements[13],
-          this.placedGroup.matrix.elements[14],
-        );
-    this.#jumpFrom.copy(cur);
+  #startJump(targetPos, orientation) {
+    this.#jumpFrom.copy(this.placedGroup.position);
     this.#jumpTo.copy(targetPos);
-    this.#jumpMat     = anchorMatrix ? Array.from(anchorMatrix) : null;
+    this.#jumpQuat    = orientation ?? null;
     this.#jumpStartMs = performance.now();
     this.#jumpActive  = true;
     this.placedGroup.matrixAutoUpdate = true;
@@ -718,25 +711,18 @@ export class SurfaceDetector extends EventTarget {
     this.placedGroup.position.lerpVectors(this.#jumpFrom, this.#jumpTo, ease);
     if (t >= 1) {
       this.#jumpActive = false;
-      if (this.#jumpMat) {
-        this.placedGroup.matrixAutoUpdate = false;
-        this.placedGroup.matrix.fromArray(this.#jumpMat);
-        this.placedGroup.matrixWorldNeedsUpdate = true;
-        this.#jumpMat = null;
+      if (this.#jumpQuat) {
+        const o = this.#jumpQuat;
+        this.placedGroup.quaternion.set(o.x, o.y, o.z, o.w);
+        this.#jumpQuat = null;
       }
     }
   }
 
   #syncShadow() {
     if (!this.#shadowPlane?.visible) return;
-    if (!this.placedGroup.matrixAutoUpdate) {
-      const e = this.placedGroup.matrix.elements;
-      this.#shadowPlane.position.x = e[12];
-      this.#shadowPlane.position.z = e[14];
-    } else {
-      this.#shadowPlane.position.x = this.placedGroup.position.x;
-      this.#shadowPlane.position.z = this.placedGroup.position.z;
-    }
+    this.#shadowPlane.position.x = this.placedGroup.position.x;
+    this.#shadowPlane.position.z = this.placedGroup.position.z;
   }
 
   // ── Anchor creation ───────────────────────────────────────────────────────

@@ -73,8 +73,11 @@ export class ARSessionManager {
         }
       },
       onScale: (scaleFactor) => {
-        if (this.dishManager.currentModel) {
-          this.dishManager.currentModel.scale.multiplyScalar(scaleFactor);
+        const model = this.dishManager.currentModel;
+        if (model) {
+          const canon = model.userData.canonicalScale ?? model.scale.x;
+          const next  = model.scale.x * scaleFactor;
+          model.scale.setScalar(Math.max(canon * 0.4, Math.min(canon * 4, next)));
         }
       }
     });
