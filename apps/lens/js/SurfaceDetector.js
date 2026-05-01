@@ -58,6 +58,7 @@ import { PoseBuffer }         from './PoseBuffer.js';
 import { PlaneValidator }     from './PlaneValidator.js';
 import { TrackingConfidence } from './TrackingConfidence.js';
 import { DeviceProfiler }     from './DeviceProfiler.js';
+import { AIDepthLayer }       from './AIDepthLayer.js';
 
 // ── Tuning ─────────────────────────────────────────────────────────────────
 
@@ -177,6 +178,9 @@ export class SurfaceDetector extends EventTarget {
   #lastTickMs = 0;
   #wasFrozen  = false;
 
+  // AI depth layer — DepthAnything v2 via Web Worker
+  #aiLayer = null;
+
   // ── Constructor ───────────────────────────────────────────────────────────
 
   constructor(scene, camera, renderer) {
@@ -209,6 +213,11 @@ export class SurfaceDetector extends EventTarget {
 
   async start(domOverlayRoot = null) {
     if (!navigator.xr) throw new Error('WebXR not supported');
+
+    // Init AI layer BEFORE requestSession — getUserMedia must claim camera
+    // before the XR session takes exclusive access.  Failure is non-fatal.
+    this.#aiLayer = new AIDepthLayer();
+    await this.#aiLayer.init().catch(() => {});
 
     this.#devProf.detect();
     this.#poseBuffer.setWindowSize(this.#devProf.settings().windowSize);
@@ -300,6 +309,10 @@ export class SurfaceDetector extends EventTarget {
 
   tick(frame, time = 0) {
     if (!frame || !this.#refSpace) return;
+
+    // Feed camera frames to AI worker every ~400ms (self-throttled, non-blocking)
+    this.#aiLayer?.tick();
+
     const s = this.#devProf.settings();
     const elapsed = time - this.#lastTickMs;
     if (elapsed < 1000 / s.updateHz) return;
@@ -359,6 +372,7 @@ export class SurfaceDetector extends EventTarget {
     const ok =
       (mode === 'hit-test' && (this.#slamReady || this.#planeVal.canPlace || this.#planeSeen || elapsed > SOAK_HITTEST)) ||
       (mode === 'depth'    && elapsed > SOAK_DEPTH) ||
+      (mode === 'ai-depth' && this.#aiLayer?.isReady && elapsed > 700) ||
       (mode === 'projection' && elapsed > SOAK_PROJ);
     if (!ok) return;
 
@@ -431,6 +445,18 @@ export class SurfaceDetector extends EventTarget {
       }
     }
 
+    // Layer 2.5: AI-guided surface detection (DepthAnything v2)
+    // Identifies the most planar image region, converts to world position via
+    // projection matrix inversion.  Better than floor projection on tables /
+    // counters and on textureless floors where hit-test fails.
+    const ap = this.#aiDepthHit(frame);
+    if (ap) {
+      this.#showReticle(ap, null);
+      this.#setMode('ai-depth', time);
+      if (this.#placed) this.#postPlaceConfidence(true, ap);
+      return;
+    }
+
     // Layer 3: floor projection
     const fp = this.#floorProject(frame);
     if (fp) {
@@ -497,6 +523,58 @@ export class SurfaceDetector extends EventTarget {
       const td = (floorY - oy) / _fwd.y;
       if (td < 0.2 || td > 6) return null;
       return { x: ox + _fwd.x * td, y: floorY, z: oz + _fwd.z * td };
+    } catch { return null; }
+  }
+
+  /**
+   * Layer 2.5 — AI-guided surface hit.
+   *
+   * DepthAnything v2 identifies the flattest image region (floor / table).
+   * We unproject that UV through the XR view's projection matrix to get a
+   * world-space ray direction, then intersect it with the floor plane
+   * (Y = 0 for local-floor, or Y = camera_height - 1.4 for local).
+   *
+   * Unlike #floorProject which always shoots down the camera forward axis,
+   * this shoots toward the actual detected surface — far more accurate on
+   * tables, counters, and textureless floors.
+   */
+  #aiDepthHit(frame) {
+    const uv = this.#aiLayer?.floorUV;
+    if (!uv) return null;
+    try {
+      const vp = frame.getViewerPose(this.#refSpace);
+      if (!vp?.views?.length) return null;
+      const view = vp.views[0];
+
+      // Convert image UV to NDC (flip Y: image top = NDC bottom)
+      const ndcX =  uv.u * 2 - 1;
+      const ndcY = -(uv.v * 2 - 1);
+
+      // Unproject NDC → view-space direction via inverse projection matrix
+      _m4.fromArray(view.projectionMatrix).invert();
+      // Use z=0 in clip space; applyMatrix4 handles perspective divide
+      _v3.set(ndcX, ndcY, 0.0).applyMatrix4(_m4);
+      _v3.normalize();
+
+      // Rotate view-space direction into world space (no translation)
+      _m4.fromArray(view.transform.matrix);
+      _fwd.copy(_v3).transformDirection(_m4);
+
+      // Camera world position
+      const cx = view.transform.matrix[12];
+      const cy = view.transform.matrix[13];
+      const cz = view.transform.matrix[14];
+
+      // Floor plane Y: 0 for local-floor, estimated for plain local
+      const floorY = this.#refType === 'local-floor' ? 0 : (cy - 1.4);
+
+      // Ray must point downward to hit floor
+      if (_fwd.y >= -0.01) return null;
+
+      const td = (floorY - cy) / _fwd.y;
+      if (td < 0.15 || td > 5.5) return null;
+
+      return { x: cx + _fwd.x * td, y: floorY, z: cz + _fwd.z * td };
     } catch { return null; }
   }
 
@@ -869,6 +947,8 @@ export class SurfaceDetector extends EventTarget {
       this.#shadowPlane.geometry.dispose(); this.#shadowPlane.material.dispose();
       this.#scene.remove(this.#shadowPlane); this.#shadowPlane = null;
     }
+    this.#aiLayer?.dispose();
+    this.#aiLayer = null;
     this.dispatchEvent(new Event('ended'));
   }
 }
