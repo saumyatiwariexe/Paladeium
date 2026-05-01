@@ -593,12 +593,15 @@
         statusText.textContent = 'Starting AR...';
         
         try {
-          const arManager = new ARSessionManager();
-          await arManager.start();
+          // MUST release camera hardware before WebXR can use it!
           if (video.srcObject) {
             video.srcObject.getTracks().forEach(t => t.stop());
           }
           video.remove();
+
+          const arManager = new ARSessionManager();
+          await arManager.start();
+          statusText.textContent = 'Scanning for surfaces...';
         } catch (e) {
           console.error(e);
           alert('Failed to start AR: ' + e.message);
