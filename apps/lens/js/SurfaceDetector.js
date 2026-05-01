@@ -468,9 +468,9 @@ export class SurfaceDetector extends EventTarget {
     } catch { return null; }
   }
 
-  #showReticle(pos, primaryMatrix, colour) {
-    if (this.#placed) { this.#reticle.visible = false; return; }
-    this.#reticle.visible = true;
+  #showReticle(pos, primaryMatrix, _colour) {
+    // Reticle is kept invisible; matrix is still updated so placement lands
+    // exactly where the detection hit when the user's tap (or auto-place) fires.
     if (primaryMatrix) {
       _m4.fromArray(primaryMatrix);
       _m4.elements[12] = pos.x; _m4.elements[13] = pos.y; _m4.elements[14] = pos.z;
@@ -479,7 +479,6 @@ export class SurfaceDetector extends EventTarget {
     }
     this.#reticle.matrix.copy(_m4);
     this.#reticle.matrixWorldNeedsUpdate = true;
-    this.#reticle.traverse(c => { if (c.isMesh) c.material.color.setHex(colour); });
   }
 
   #setMode(mode, time) {

@@ -117,34 +117,31 @@ export class ARSessionManager {
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    const statusText      = document.getElementById('status-text');
-    const anchorStatus    = document.getElementById('anchor-status');
-    const tapHint         = document.getElementById('surface-tap-hint');
-    const hintText        = document.getElementById('surface-hint-text');
-    const surfaceControls = document.getElementById('surface-controls');
+    const statusText   = document.getElementById('status-text');
+    const anchorStatus = document.getElementById('anchor-status');
+    const tapHint      = document.getElementById('surface-tap-hint');
+    const hintText     = document.getElementById('surface-hint-text');
 
     this.surfaceDetector.addEventListener('warming', e => {
       if (statusText) statusText.textContent = `Scanning… ${Math.round(e.progress * 100)}%`;
       if (tapHint) tapHint.classList.add('visible');
-      if (hintText) hintText.textContent = 'Scanning surface…';
     });
 
     this.surfaceDetector.addEventListener('ready', () => {
-      if (statusText) statusText.textContent = 'Tap to place';
-      if (hintText) hintText.textContent = 'Tap surface to place';
+      if (statusText) statusText.textContent = 'Placing…';
     });
 
     this.surfaceDetector.addEventListener('surface', e => {
       if (e.found && !this.surfaceDetector.isPlaced) {
         if (anchorStatus) anchorStatus.classList.add('found');
         if (tapHint) tapHint.classList.add('visible');
+        if (hintText) hintText.textContent = 'Scanning surface…';
       }
     });
 
     this.surfaceDetector.addEventListener('placed', () => {
       setState({ anchorPlaced: true });
       if (tapHint) tapHint.classList.remove('visible');
-      if (surfaceControls) surfaceControls.style.display = 'flex';
       if (statusText) statusText.textContent = 'AR Active';
       if (anchorStatus) anchorStatus.classList.add('found');
       if (State.menuItems.length > 0) {
@@ -153,14 +150,6 @@ export class ARSessionManager {
       if (!localStorage.getItem('paladeium_tutorial_seen')) {
         this.showTutorial();
       }
-    });
-
-    this.surfaceDetector.addEventListener('reset', () => {
-      if (tapHint) tapHint.classList.add('visible');
-      if (hintText) hintText.textContent = this.surfaceDetector.slamReady ? 'Tap surface to place' : 'Scanning surface…';
-      if (surfaceControls) surfaceControls.style.display = 'none';
-      if (statusText) statusText.textContent = 'Tap to place';
-      if (anchorStatus) anchorStatus.classList.remove('found');
     });
   }
 

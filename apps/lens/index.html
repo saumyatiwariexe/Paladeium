@@ -427,9 +427,58 @@
       80% { transform: translateX(-50px) rotate(-10deg); opacity: 1; }
       100% { transform: translateX(-50px) rotate(-10deg); opacity: 0; }
     }
+
+    /* ─── Splash Screen ─── */
+    #splash-screen {
+      position: fixed; inset: 0;
+      z-index: 200;
+      background: var(--dark);
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column;
+      transition: opacity 0.4s ease;
+    }
+    #splash-screen.hidden { opacity: 0; pointer-events: none; }
+    .splash-inner {
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      padding: 40px 32px; text-align: center;
+    }
+    .splash-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 40px; font-weight: 700;
+      color: var(--gold); letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    .splash-logo span { color: var(--text); font-weight: 300; }
+    .splash-tagline {
+      font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase;
+      color: var(--muted);
+    }
+    #open-menu-btn {
+      margin-top: 48px;
+      background: var(--gold);
+      color: #0A0A0F;
+      border: none; border-radius: 50px;
+      padding: 18px 56px;
+      font-size: 16px; font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      box-shadow: 0 4px 32px rgba(212,168,83,0.4);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    #open-menu-btn:active { transform: scale(0.96); box-shadow: 0 2px 16px rgba(212,168,83,0.25); }
   </style>
 </head>
 <body>
+
+  <!-- Splash Screen -->
+  <div id="splash-screen">
+    <div class="splash-inner">
+      <div class="splash-logo">Paladeium<span> Lens</span></div>
+      <div class="splash-tagline">Interactive AR Menu</div>
+      <button id="open-menu-btn">Open Menu</button>
+    </div>
+  </div>
 
   <div id="ar-container"></div>
 
@@ -457,13 +506,10 @@
     <p>Point at the <strong>menu card</strong> first so the dish appears in AR</p>
   </div>
 
-  <!-- Surface mode: tap hint + reposition -->
+  <!-- Surface scanning status hint -->
   <div id="surface-tap-hint">
     <div class="tap-pulse"></div>
-    <span id="surface-hint-text">Tap surface to place</span>
-  </div>
-  <div id="surface-controls">
-    <button id="surface-reposition-btn" onclick="repositionSurface()">Reposition</button>
+    <span id="surface-hint-text">Scanning surface…</span>
   </div>
 
   <!-- Skeleton Loading -->
@@ -559,60 +605,26 @@
 
     async function init() {
       await fetchMenu();
-
-      // Setup camera background
-      const video = document.createElement('video');
-      video.autoplay = true; video.muted = true; video.playsInline = true;
-      video.style.position = 'fixed';
-      video.style.top = '0'; video.style.left = '0';
-      video.style.width = '100%'; video.style.height = '100%';
-      video.style.objectFit = 'cover';
-      video.style.zIndex = '-1';
-      document.body.appendChild(video);
-      
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        video.srcObject = stream;
-      } catch(e) {
-        console.warn('Camera preview failed', e);
-      }
-      
-      // Show skeleton initially
-      const modelLoading = document.getElementById('model-loading');
-      if (modelLoading) modelLoading.classList.add('visible');
-
-      const statusText = document.getElementById('status-text');
-      let arStarted = false;
-
-      const startAR = async () => {
-        if(arStarted) return;
-        arStarted = true;
-        statusText.textContent = 'Starting AR...';
-
-        try {
-          // MUST release camera hardware before WebXR can use it!
-          if (video.srcObject) {
-            video.srcObject.getTracks().forEach(t => t.stop());
-          }
-          video.remove();
-
-          window._arManager = new ARSessionManager();
-          await window._arManager.start();
-        } catch (e) {
-          arStarted = false;
-          console.error(e);
-          alert('AR failed: ' + e.message);
-        }
-      };
-
-      window.repositionSurface = function() {
-        if (window._arManager) window._arManager.surfaceDetector.resetPlacement();
-      };
-
-      // Trigger WebXR on any first interaction
-      document.addEventListener('touchstart', startAR, { once: true, capture: true });
-      document.addEventListener('click', startAR, { once: true, capture: true });
     }
+
+    let arStarted = false;
+    document.getElementById('open-menu-btn').addEventListener('click', async () => {
+      if (arStarted) return;
+      arStarted = true;
+
+      const splash = document.getElementById('splash-screen');
+      if (splash) splash.classList.add('hidden');
+
+      try {
+        window._arManager = new ARSessionManager();
+        await window._arManager.start();
+      } catch (e) {
+        arStarted = false;
+        if (splash) splash.classList.remove('hidden');
+        console.error(e);
+        alert('AR failed: ' + e.message);
+      }
+    });
 
     init();
   </script>
