@@ -212,23 +212,31 @@ export class SurfaceDetector extends EventTarget {
   async start(domOverlayRoot = null) {
     if (!navigator.xr) throw new Error('WebXR not supported');
 
-    const settings = this.#devProf.detect() && this.#devProf.settings();
+    this.#devProf.detect();
     this.#poseBuffer.setWindowSize(this.#devProf.settings().windowSize);
 
     const optional = ['plane-detection', 'anchors', 'local-floor', 'depth-sensing'];
     if (domOverlayRoot) optional.push('dom-overlay');
 
-    const sessionInit = {
+    // ── Request session — try with depthSensing first, fall back without ──
+    const baseInit = {
       requiredFeatures: ['hit-test'],
       optionalFeatures: optional,
-      depthSensing: {
-        usagePreference:      ['cpu-optimized', 'gpu-optimized'],
-        dataFormatPreference: ['luminance-alpha', 'float32'],
-      },
     };
-    if (domOverlayRoot) sessionInit.domOverlay = { root: domOverlayRoot };
+    if (domOverlayRoot) baseInit.domOverlay = { root: domOverlayRoot };
 
-    this.#session = await navigator.xr.requestSession('immersive-ar', sessionInit);
+    try {
+      this.#session = await navigator.xr.requestSession('immersive-ar', {
+        ...baseInit,
+        depthSensing: {
+          usagePreference:      ['cpu-optimized', 'gpu-optimized'],
+          dataFormatPreference: ['luminance-alpha', 'float32'],
+        },
+      });
+    } catch {
+      console.warn('[Surface] Session with depthSensing failed — retrying without');
+      this.#session = await navigator.xr.requestSession('immersive-ar', baseInit);
+    }
 
     const enabled    = new Set(Array.from(this.#session.enabledFeatures ?? []));
     this.#hasAnchors = enabled.has('anchors');
@@ -236,32 +244,59 @@ export class SurfaceDetector extends EventTarget {
     this.#hasDepth   = enabled.has('depth-sensing');
     this.#refType    = enabled.has('local-floor') ? 'local-floor' : 'local';
 
-    if (this.#refType === 'local') console.warn('[Surface] local-floor unavailable → local');
-    console.log(`[Surface] tier:${this.#devProf.tier} refType:${this.#refType} depth:${this.#hasDepth} anchors:${this.#hasAnchors} planes:${this.#hasPlanes}`);
+    console.log(`[Surface] tier:${this.#devProf.tier} ref:${this.#refType} depth:${this.#hasDepth} anchors:${this.#hasAnchors} planes:${this.#hasPlanes}`);
 
     this.#renderer.xr.enabled = true;
     this.#renderer.xr.setReferenceSpaceType(this.#refType);
     await this.#renderer.xr.setSession(this.#session);
 
     this.#refSpace = this.#renderer.xr.getReferenceSpace();
-    if (!this.#refSpace) throw new Error('XR reference space unavailable');
+    if (!this.#refSpace) throw new Error('XR reference space unavailable after setSession');
 
     const viewerSpace = await this.#session.requestReferenceSpace('viewer');
-    for (const off of RAY_OFFSETS) {
-      try {
-        let ray;
-        try { ray = new XRRay({ x: 0, y: 0, z: 0, w: 1 }, off); } catch { ray = undefined; }
-        const src = await this.#session.requestHitTestSource({
-          space: viewerSpace, offsetRay: ray, entityTypes: ['plane', 'point', 'mesh'],
-        });
-        this.#hitSources.push(src);
-      } catch { /* skip unsupported offset */ }
-    }
-    if (!this.#hitSources.length) throw new Error('No hit-test sources created');
+    this.#hitSources  = await this.#createHitSources(viewerSpace);
     console.log(`[Surface] ${this.#hitSources.length} hit-test source(s) ✓`);
 
     this.#session.addEventListener('end', () => this.#cleanup());
     this.dispatchEvent(new Event('started'));
+  }
+
+  /**
+   * Create hit-test sources with progressive fallback so we always end up
+   * with at least one working source regardless of browser capability:
+   *
+   *   Pass 1 — 5 offset rays  + entityTypes  (best coverage)
+   *   Pass 2 — 5 offset rays  without entityTypes  (wider compat)
+   *   Pass 3 — 1 centre ray   without anything     (guaranteed fallback)
+   */
+  async #createHitSources(viewerSpace) {
+    // Pass 1: multi-ray + entityTypes
+    const sources = await this.#tryRays(viewerSpace, true);
+    if (sources.length) return sources;
+
+    // Pass 2: multi-ray without entityTypes
+    console.warn('[Surface] entityTypes not supported — trying plain offset rays');
+    const sources2 = await this.#tryRays(viewerSpace, false);
+    if (sources2.length) return sources2;
+
+    // Pass 3: single centre ray, no options at all
+    console.warn('[Surface] Offset rays failed — falling back to single centre ray');
+    const src = await this.#session.requestHitTestSource({ space: viewerSpace });
+    return [src];
+  }
+
+  async #tryRays(viewerSpace, withEntityTypes) {
+    const out = [];
+    for (const off of RAY_OFFSETS) {
+      try {
+        let ray;
+        try { ray = new XRRay({ x: 0, y: 0, z: 0, w: 1 }, off); } catch { ray = undefined; }
+        const opts = { space: viewerSpace, offsetRay: ray };
+        if (withEntityTypes) opts.entityTypes = ['plane', 'point', 'mesh'];
+        out.push(await this.#session.requestHitTestSource(opts));
+      } catch { /* skip this offset */ }
+    }
+    return out;
   }
 
   tick(frame, time = 0) {
