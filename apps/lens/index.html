@@ -593,6 +593,8 @@
                 hasAR: item.hasAr ?? item.hasAR ?? false,
               }));
             }
+            // Apply overlay visibility from restaurant settings (default: hidden)
+            window._arOverlayEnabled = data.restaurant?.arOverlayEnabled ?? false;
           }
         } catch {
           console.warn('[Paladeium] API unavailable — using default menu');
@@ -614,6 +616,13 @@
 
       const splash = document.getElementById('splash-screen');
       if (splash) splash.classList.add('hidden');
+
+      // Hide status bar and scanning hint unless restaurant opted in
+      if (!window._arOverlayEnabled) {
+        const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
+        hide('status-bar');
+        hide('surface-tap-hint');
+      }
 
       try {
         window._arManager = new ARSessionManager();

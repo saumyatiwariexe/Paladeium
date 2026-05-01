@@ -8,6 +8,7 @@ export interface Restaurant {
   status: RestaurantStatus
   targetsUrl: string | null
   markerDetectionEnabled?: boolean
+  arOverlayEnabled?: boolean
   deleteAt?: string | null
   createdAt: string
   updatedAt: string
@@ -65,6 +66,7 @@ export interface LensMenuResponse {
     targetsUrl: string | null
     currency: string
     markerDetectionEnabled: boolean
+    arOverlayEnabled: boolean
   }
   menu: LensMenuItem[]
   categories: Array<{ id: string; name: string; emoji: string }>

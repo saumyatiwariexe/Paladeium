@@ -6,6 +6,7 @@ import CopyButton from './CopyButton'
 import DeleteItemButton from './DeleteItemButton'
 import ToggleAvailableButton from './ToggleAvailableButton'
 import ToggleMarkerDetectionButton from './ToggleMarkerDetectionButton'
+import ToggleAROverlayButton from './ToggleAROverlayButton'
 
 const LENS_URL = process.env.LENS_URL ?? 'http://localhost:3001'
 
@@ -65,6 +66,10 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
           <ToggleMarkerDetectionButton
             restaurantSlug={restaurant.slug}
             enabled={restaurant.markerDetectionEnabled ?? true}
+          />
+          <ToggleAROverlayButton
+            restaurantSlug={restaurant.slug}
+            enabled={restaurant.arOverlayEnabled ?? false}
           />
           <Link
             href={`/restaurants/${params.id}/marker`}

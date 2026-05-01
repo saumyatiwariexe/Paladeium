@@ -10,6 +10,7 @@ const RestaurantUpdateSchema = z.object({
   status:                 z.enum(['active', 'inactive', 'pending', 'pendingDeletion']).optional(),
   targetsUrl:             z.string().url().nullable().optional(),
   markerDetectionEnabled: z.boolean().optional(),
+  arOverlayEnabled:       z.boolean().optional(),
   deleteAt:               z.string().nullable().optional(),
 }).strict()
 
