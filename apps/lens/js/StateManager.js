@@ -1,12 +1,12 @@
 export const State = {
   currentDishIndex: 0,
-  loadedDishes: new Map(), // id -> THREE.Group
-  loadingQueue: [],
+  loadedDishes: new Map(),
   isMenuOpen: false,
   anchorPlaced: false,
   menuItems: [],
   activeDishId: null,
-  showInfoCard: false
+  showInfoCard: false,
+  restaurantSlug: null,
 };
 
 const listeners = [];

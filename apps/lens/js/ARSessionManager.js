@@ -124,26 +124,34 @@ export class ARSessionManager {
     const anchorStatus = document.getElementById('anchor-status');
     const tapHint      = document.getElementById('surface-tap-hint');
     const hintText     = document.getElementById('surface-hint-text');
+    const scanRing     = document.getElementById('scan-ring');
+    const scanFill     = document.getElementById('scan-ring-fill');
 
     this.surfaceDetector.addEventListener('warming', e => {
       if (statusText) statusText.textContent = `Scanning… ${Math.round(e.progress * 100)}%`;
-      if (tapHint) tapHint.classList.add('visible');
+      // Rotate the ring fill to show scan progress (0–270°)
+      if (scanFill) scanFill.style.transform = `rotate(${Math.round(e.progress * 270)}deg)`;
     });
 
     this.surfaceDetector.addEventListener('ready', () => {
       if (statusText) statusText.textContent = 'Placing…';
+      if (anchorStatus) anchorStatus.classList.add('found');
+      if (scanRing) scanRing.classList.add('ready');
     });
 
     this.surfaceDetector.addEventListener('surface', e => {
       if (e.found && !this.surfaceDetector.isPlaced) {
-        if (anchorStatus) anchorStatus.classList.add('found');
+        if (scanRing) scanRing.classList.add('visible');
         if (tapHint) tapHint.classList.add('visible');
-        if (hintText) hintText.textContent = 'Scanning surface…';
+        if (hintText) hintText.textContent = 'Hold still…';
+      } else if (!e.found) {
+        if (scanRing) scanRing.classList.remove('visible');
       }
     });
 
     this.surfaceDetector.addEventListener('placed', () => {
       setState({ anchorPlaced: true });
+      if (scanRing) { scanRing.classList.remove('visible', 'ready'); }
       if (tapHint) tapHint.classList.remove('visible');
       if (statusText) statusText.textContent = 'AR Active';
       if (anchorStatus) anchorStatus.classList.add('found');

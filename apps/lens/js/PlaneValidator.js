@@ -12,7 +12,7 @@
  */
 
 export class PlaneValidator {
-  static CONFIDENCE_THRESHOLD = 0.55;
+  static CONFIDENCE_THRESHOLD = 0.38;
 
   // Weight per component (must sum to 1.0 without the bonus)
   static #W_DENSITY  = 0.35;

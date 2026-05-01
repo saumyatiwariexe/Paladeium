@@ -337,8 +337,44 @@
     }
     #surface-reposition-btn:active { transform: scale(0.96); }
 
+    /* ─── Scanning Ring ─── */
+    #scan-ring {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 45;
+      width: 110px; height: 110px;
+      border-radius: 50%;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    #scan-ring.visible { opacity: 1; }
+    .scan-ring-track {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 2px solid rgba(212,168,83,0.18);
+    }
+    .scan-ring-fill {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 2.5px solid transparent;
+      border-top-color: var(--gold);
+      border-right-color: var(--gold);
+      transition: transform 0.25s ease;
+    }
+    #scan-ring.ready .scan-ring-fill {
+      border-color: var(--gold);
+      animation: spin-complete 0.4s ease forwards;
+    }
+    @keyframes spin-complete {
+      to { transform: rotate(360deg); opacity: 0.6; }
+    }
+    .scan-ring-icon {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+
     #surface-tap-hint {
-      position: fixed; bottom: 380px; left: 50%;
+      position: fixed; bottom: 220px; left: 50%;
       transform: translateX(-50%);
       z-index: 45;
       background: var(--card-bg);
@@ -504,6 +540,13 @@
       </svg>
     </div>
     <p>Point at the <strong>menu card</strong> first so the dish appears in AR</p>
+  </div>
+
+  <!-- Scanning ring — shows AR detection progress, centered on screen -->
+  <div id="scan-ring">
+    <div class="scan-ring-track"></div>
+    <div class="scan-ring-fill" id="scan-ring-fill"></div>
+    <div class="scan-ring-icon">📍</div>
   </div>
 
   <!-- Surface scanning status hint -->

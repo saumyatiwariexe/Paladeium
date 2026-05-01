@@ -28,8 +28,7 @@ export class PreloadQueue {
 
     this.queue.push({ dish, priority });
     this.queue.sort((a, b) => (a.priority === 'high' ? -1 : (b.priority === 'high' ? 1 : 0)));
-    
-    setState({ loadingQueue: this.queue.map(q => q.dish.id) });
+
     this.processQueue();
   }
 
@@ -38,7 +37,6 @@ export class PreloadQueue {
     
     this.isLoading = true;
     const { dish } = this.queue.shift();
-    setState({ loadingQueue: this.queue.map(q => q.dish.id) });
 
     let url = /^https?:\/\//.test(dish.model) ? dish.model : './' + dish.model;
     if (State.restaurantSlug && dish.model && !dish.model.includes('/') && !/^https?:\/\//.test(dish.model)) {

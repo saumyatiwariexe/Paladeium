@@ -61,11 +61,9 @@ import { DeviceProfiler }     from './DeviceProfiler.js';
 
 // ── Tuning ─────────────────────────────────────────────────────────────────
 
-const PLANE_OPACITY = 0.18;
-const RETICLE_R     = 0.08;
-const SHADOW_SIZE   = 0.55;
-const PLANE_COLOR_H = 0x4a9eff;
-const PLANE_COLOR_V = 0xff9a4a;
+const RETICLE_R   = 0.04;     // 4 cm — smaller, less intrusive indicator
+const SHADOW_SIZE = 0.55;
+const INDICATOR_COL = 0xD4A853; // gold — matches app theme
 
 // Multi-ray offsets in viewer space (-Z = forward, Y = up)
 const RAY_OFFSETS = [
@@ -81,26 +79,22 @@ const DEPTH_UV = [
   [0.50, 0.50], [0.40, 0.55], [0.60, 0.55], [0.50, 0.65], [0.50, 0.40],
 ];
 
-// SLAM warmup
-const WARMUP_TARGET = 20;
+// SLAM warmup — lower target means faster first placement on good surfaces
+const WARMUP_TARGET = 8;
 
-// Pre-placement soak times for fallback sources
-const SOAK_DEPTH = 1500;   // ms
-const SOAK_PROJ  = 3000;   // ms
+// Pre-placement soak times (ms) — how long each source must be stable before auto-placing
+const SOAK_HITTEST = 1000;  // hit-test time-based fallback (SLAM/confidence gates take priority)
+const SOAK_DEPTH   =  600;  // depth-sensing soak
+const SOAK_PROJ    = 1200;  // floor-projection soak
 
 // Anchor / freeze
-const FREEZE_MS       = 1800;   // freeze after placement so anchor can stabilise
-const ANCHOR_NOISE_M  = 0.001;  // 1 mm — skip imperceptibly small updates
-const JUMP_M          = 0.04;   // 4 cm — animate instead of snap
-const JUMP_MS         = 550;    // cubic-ease-out duration for large corrections
-const ANCHOR_RETRY_N  = 20;     // max anchor creation attempts
-const ANCHOR_RETRY_MS = 500;    // ms between retries
-const PLANE_SEARCH_R  = 0.50;   // metres — search for nearest plane within this radius
-
-// Reticle tint per source
-const COL_HIT   = 0xffffff;
-const COL_DEPTH = 0x88ddff;
-const COL_PROJ  = 0xffcc55;
+const FREEZE_MS       = 1800;
+const ANCHOR_NOISE_M  = 0.001;
+const JUMP_M          = 0.04;
+const JUMP_MS         = 550;
+const ANCHOR_RETRY_N  = 20;
+const ANCHOR_RETRY_MS = 500;
+const PLANE_SEARCH_R  = 0.50;
 
 // Scratch
 const _m4  = new THREE.Matrix4();
@@ -129,12 +123,14 @@ export class SurfaceDetector extends EventTarget {
   #hasAnchors = false;
   #hasPlanes  = false;
 
-  // Reticle
-  #reticle    = null;
+  // Reticle / indicator
+  #reticle     = null;
+  #reticleMat  = null;   // material reference for opacity animation
   #shadowPlane = null;
   #reticleHit  = false;
   #sourceMode  = null;
   #reticleOnAt = 0;
+  #planeSeen   = false;  // any XRPlane detected last tick → allow immediate placement
 
   // Placement capture — matrix is saved at tap time for accuracy
   #pendingPlace       = false;
@@ -150,11 +146,16 @@ export class SurfaceDetector extends EventTarget {
   #planeLocalOff  = new THREE.Vector3();
 
   // Tier B — world anchor
-  #worldAnchor      = null;
-  #savedXRTransform = null;
-  #anchorRetries    = 0;
-  #retryAt          = 0;
-  #anchorSettleEnd  = 0;
+  #worldAnchor          = null;
+  #savedXRTransform     = null;  // fallback when XRHitTestResult.createAnchor() unavailable
+  #anchorRetries        = 0;
+  #retryAt              = 0;
+  #anchorSettleEnd      = 0;
+  #surfaceAnchorPending = false; // true while XRHitTestResult.createAnchor() promise is in flight
+
+  // Room capture (Meta Quest / devices that support initiateRoomCapture)
+  #roomCaptureAttempted = false;
+  #sessionStartMs       = 0;
 
   // Jump animation (shared by tiers A and B)
   #jumpActive  = false;
@@ -162,9 +163,6 @@ export class SurfaceDetector extends EventTarget {
   #jumpTo      = new THREE.Vector3();
   #jumpStartMs = 0;
   #jumpQuat    = null;  // anchor orientation to apply after jump completes
-
-  // Planes display
-  #planes = new Map();
 
   // SLAM warmup
   #warmupHits = 0;
@@ -258,6 +256,7 @@ export class SurfaceDetector extends EventTarget {
     console.log(`[Surface] ${this.#hitSources.length} hit-test source(s) ✓`);
 
     this.#session.addEventListener('end', () => this.#cleanup());
+    this.#sessionStartMs = performance.now();
     this.dispatchEvent(new Event('started'));
   }
 
@@ -292,7 +291,7 @@ export class SurfaceDetector extends EventTarget {
         let ray;
         try { ray = new XRRay({ x: 0, y: 0, z: 0, w: 1 }, off); } catch { ray = undefined; }
         const opts = { space: viewerSpace, offsetRay: ray };
-        if (withEntityTypes) opts.entityTypes = ['plane', 'point', 'mesh'];
+        if (withEntityTypes) opts.entityTypes = ['plane', 'point'];
         out.push(await this.#session.requestHitTestSource(opts));
       } catch { /* skip this offset */ }
     }
@@ -308,12 +307,37 @@ export class SurfaceDetector extends EventTarget {
     this.#lastTickMs = time;
 
     try {
+      // Track whether any XR planes are visible — enables instant placement when plane found
+      if (this.#hasPlanes) {
+        const det = frame.detectedPlanes ?? new Set();
+        this.#planeSeen = det.size > 0;
+
+        // initiateRoomCapture: kick the device's room-scan if no planes appear within 2.5s
+        // (supported on Meta Quest; silently ignored on other devices)
+        if (!this.#placed && !this.#roomCaptureAttempted && !this.#planeSeen &&
+            performance.now() - this.#sessionStartMs > 2500) {
+          this.#roomCaptureAttempted = true;
+          if (typeof this.#session.initiateRoomCapture === 'function') {
+            this.#session.initiateRoomCapture().catch(() => {});
+            console.log('[Surface] initiateRoomCapture triggered');
+          }
+        }
+      }
+
       this.#updateReticle(frame, time);
-      if (s.showPlanes && this.#hasPlanes) this.#updatePlanes(frame);
       this.#updateAnchor(frame);
+
       if (this.#pendingPlace) {
         this.#pendingPlace = false;
         this.#executePlacement(frame);
+      }
+
+      // Pulse the placement indicator during scanning
+      if (!this.#placed && this.#reticle?.visible && this.#reticleMat) {
+        const ready = this.#slamReady || this.#planeVal.canPlace || this.#planeSeen;
+        this.#reticleMat.opacity = ready
+          ? 0.92
+          : 0.45 + 0.45 * Math.sin(time * 0.006);
       }
     } catch (e) { console.error('[Surface] tick:', e); }
   }
@@ -325,14 +349,19 @@ export class SurfaceDetector extends EventTarget {
   requestPlacement() {
     if (!this.#reticleHit || this.#placed) return;
 
-    const mode = this.#sourceMode;
-    const ok = (mode === 'hit-test' && (this.#slamReady || this.#planeVal.canPlace)) ||
-               (mode === 'hit-test' && Date.now() - this.#reticleOnAt > SOAK_PROJ) ||
-               (mode === 'depth'    && Date.now() - this.#reticleOnAt > SOAK_DEPTH) ||
-               (mode === 'projection' && Date.now() - this.#reticleOnAt > SOAK_PROJ);
+    const mode    = this.#sourceMode;
+    const elapsed = Date.now() - this.#reticleOnAt;
+
+    // Placement gates (first matching condition wins):
+    //   Hit-test: SLAM ready, confidence high, plane visible, or 1s time fallback
+    //   Depth:    600ms soak
+    //   Projection: 1.2s soak (least accurate — needs more time)
+    const ok =
+      (mode === 'hit-test' && (this.#slamReady || this.#planeVal.canPlace || this.#planeSeen || elapsed > SOAK_HITTEST)) ||
+      (mode === 'depth'    && elapsed > SOAK_DEPTH) ||
+      (mode === 'projection' && elapsed > SOAK_PROJ);
     if (!ok) return;
 
-    // Capture the reticle matrix at this exact moment
     this.#pendingPlaceMatrix = this.#reticle.matrix.clone();
     this.#pendingPlace = true;
   }
@@ -342,11 +371,13 @@ export class SurfaceDetector extends EventTarget {
       try { this.#worldAnchor.delete(); } catch { /* */ }
       this.#worldAnchor = null;
     }
-    this.#placed      = false;
-    this.#anchorPlane = null;
-    this.#jumpActive  = false;
-    this.#anchorRetries = 0;
-    this.#retryAt       = 0;
+    this.#placed               = false;
+    this.#anchorPlane          = null;
+    this.#jumpActive           = false;
+    this.#anchorRetries        = 0;
+    this.#retryAt              = 0;
+    this.#savedXRTransform     = null;
+    this.#surfaceAnchorPending = false;
     this.#lastPos.set(Infinity, Infinity, Infinity);
     this.placedGroup.matrixAutoUpdate = true;
     this.placedGroup.visible = false;
@@ -355,6 +386,7 @@ export class SurfaceDetector extends EventTarget {
     this.#reticleHit  = false;
     this.#wasFrozen   = false;
     this.#reticleOnAt = 0;
+    this.#roomCaptureAttempted = false;
     this.#trackConf.reset();
     this.#poseBuffer.reset();
     this.#planeVal.reset();
@@ -379,7 +411,7 @@ export class SurfaceDetector extends EventTarget {
       this.#planeVal.recordHit();
       this.#advanceWarmup();
       const sm = this.#poseBuffer.getSmoothed() ?? med;
-      this.#showReticle(sm, primaryMatrix, COL_HIT);
+      this.#showReticle(sm, primaryMatrix);
       this.#setMode('hit-test', time);
       if (this.#placed) this.#postPlaceConfidence(true, sm);
       return;
@@ -392,7 +424,7 @@ export class SurfaceDetector extends EventTarget {
     if (this.#hasDepth) {
       const dp = this.#depthHit(frame);
       if (dp) {
-        this.#showReticle(dp, null, COL_DEPTH);
+        this.#showReticle(dp, null);
         this.#setMode('depth', time);
         if (this.#placed) this.#postPlaceConfidence(true, dp);
         return;
@@ -402,7 +434,7 @@ export class SurfaceDetector extends EventTarget {
     // Layer 3: floor projection
     const fp = this.#floorProject(frame);
     if (fp) {
-      this.#showReticle(fp, null, COL_PROJ);
+      this.#showReticle(fp, null);
       this.#setMode('projection', time);
       if (this.#placed) this.#postPlaceConfidence(false, fp);
       return;
@@ -468,9 +500,7 @@ export class SurfaceDetector extends EventTarget {
     } catch { return null; }
   }
 
-  #showReticle(pos, primaryMatrix, _colour) {
-    // Reticle is kept invisible; matrix is still updated so placement lands
-    // exactly where the detection hit when the user's tap (or auto-place) fires.
+  #showReticle(pos, primaryMatrix) {
     if (primaryMatrix) {
       _m4.fromArray(primaryMatrix);
       _m4.elements[12] = pos.x; _m4.elements[13] = pos.y; _m4.elements[14] = pos.z;
@@ -479,6 +509,7 @@ export class SurfaceDetector extends EventTarget {
     }
     this.#reticle.matrix.copy(_m4);
     this.#reticle.matrixWorldNeedsUpdate = true;
+    if (!this.#placed) this.#reticle.visible = true;
   }
 
   #setMode(mode, time) {
@@ -492,8 +523,8 @@ export class SurfaceDetector extends EventTarget {
 
   #advanceWarmup() {
     if (this.#slamReady) return;
-    if (++this.#warmupHits % 5 === 0)
-      this.dispatchEvent(Object.assign(new Event('warming'), { progress: this.#warmupHits / WARMUP_TARGET }));
+    if (++this.#warmupHits % 2 === 0)
+      this.dispatchEvent(Object.assign(new Event('warming'), { progress: Math.min(this.#warmupHits / WARMUP_TARGET, 0.95) }));
     if (this.#warmupHits >= WARMUP_TARGET) {
       this.#slamReady = true;
       console.log('[Surface] SLAM ready ✓');
@@ -509,7 +540,6 @@ export class SurfaceDetector extends EventTarget {
     const frozen = this.#trackConf.isFrozen;
     if (frozen && !this.#wasFrozen) { this.#wasFrozen = true; this.dispatchEvent(new Event('frozen')); }
     else if (!frozen && this.#wasFrozen) { this.#wasFrozen = false; this.dispatchEvent(new Event('unfrozen')); }
-    this.dispatchEvent(Object.assign(new Event('confidence'), { score: this.#trackConf.score }));
   }
 
   // ── Placement ─────────────────────────────────────────────────────────────
@@ -563,21 +593,45 @@ export class SurfaceDetector extends EventTarget {
     this.#lastPos.copy(pos);
     _prv.copy(pos);
 
-    // ── Save XRRigidTransform for anchor / retry ────────────────────────
-    // Get fresh hit-test pose for the XRRigidTransform (anchors need the raw pose)
+    // ── Create anchor for long-term stability ──────────────────────────
     if (this.#hasAnchors && this.#hitSources.length) {
       const hits = frame.getHitTestResults(this.#hitSources[0]);
       if (hits.length) {
-        const hp = hits[0].getPose(this.#refSpace);
-        if (hp) {
-          this.#savedXRTransform = new XRRigidTransform(
-            hp.transform.position, hp.transform.orientation,
-          );
+        const hitResult = hits[0];
+
+        // Preferred path (W3C spec / ARCore): surface-attached anchor created
+        // directly from the XRHitTestResult — attaches to the real-world surface
+        // so SLAM corrections move the anchor WITH the surface.
+        if (typeof hitResult.createAnchor === 'function') {
+          this.#surfaceAnchorPending = true;
+          hitResult.createAnchor()
+            .then(anchor => {
+              this.#surfaceAnchorPending = false;
+              this.#worldAnchor    = anchor;
+              this.#anchorSettleEnd = performance.now() + 250;
+              this.#lastPos.copy(this.placedGroup.position);
+              console.log('[Surface] Surface-attached anchor ✓ (XRHitTestResult)');
+            })
+            .catch(err => {
+              this.#surfaceAnchorPending = false;
+              console.warn('[Surface] Surface anchor failed — falling back to world anchor:', err);
+              // Fallback: free-floating world anchor via XRRigidTransform
+              const hp = hitResult.getPose(this.#refSpace);
+              if (hp) {
+                this.#savedXRTransform = new XRRigidTransform(hp.transform.position, hp.transform.orientation);
+                this.#retryAt = performance.now();
+              }
+            });
+
+        } else {
+          // Fallback for older browsers: world anchor via XRRigidTransform
+          const hp = hitResult.getPose(this.#refSpace);
+          if (hp) {
+            this.#savedXRTransform = new XRRigidTransform(hp.transform.position, hp.transform.orientation);
+            this.#retryAt = performance.now();
+            this.#tryCreateAnchor(frame);
+          }
         }
-      }
-      if (this.#savedXRTransform) {
-        this.#retryAt = performance.now();  // attempt immediately
-        this.#tryCreateAnchor(frame);
       }
     }
 
@@ -597,8 +651,9 @@ export class SurfaceDetector extends EventTarget {
     // During freeze period: object is immovable — let anchor stabilise
     if (performance.now() < this.#freezeUntil) return;
 
-    // Retry anchor creation
-    if (!this.#worldAnchor && this.#hasAnchors && this.#anchorRetries < ANCHOR_RETRY_N) {
+    // Retry fallback world-anchor creation (only if surface-attached anchor didn't resolve yet)
+    if (!this.#worldAnchor && !this.#surfaceAnchorPending && this.#savedXRTransform &&
+        this.#hasAnchors && this.#anchorRetries < ANCHOR_RETRY_N) {
       if (performance.now() >= this.#retryAt) {
         this.#retryAt = performance.now() + ANCHOR_RETRY_MS;
         this.#tryCreateAnchor(frame);
@@ -640,24 +695,24 @@ export class SurfaceDetector extends EventTarget {
     if (!pp) return;
 
     _m4.fromArray(pp.transform.matrix);
-    // World position = plane matrix × local offset
-    const newPos = this.#planeLocalOff.clone().applyMatrix4(_m4);
+    // World position = plane matrix × local offset (reuse scratch _v3 — no allocation)
+    _v3.copy(this.#planeLocalOff).applyMatrix4(_m4);
 
-    const delta = newPos.distanceTo(this.#lastPos);
+    const delta = _v3.distanceTo(this.#lastPos);
     if (delta < ANCHOR_NOISE_M) {
       if (this.placedGroup.children.length > 0) this.placedGroup.visible = true;
       return;
     }
 
     if (delta > JUMP_M) {
-      this.#startJump(newPos, null);
+      this.#startJump(_v3, null);
     } else {
-      // Small correction — apply directly (plane tracking is inherently stable)
+      // Lerp small corrections to avoid micro-jitter from SLAM plane refinements
       this.placedGroup.matrixAutoUpdate = true;
-      this.placedGroup.position.copy(newPos);
+      this.placedGroup.position.lerp(_v3, delta > 0.015 ? 0.6 : 0.25);
     }
 
-    this.#lastPos.copy(newPos);
+    this.#lastPos.copy(_v3);
     if (this.placedGroup.children.length > 0) this.placedGroup.visible = true;
     this.#syncShadow();
   }
@@ -684,10 +739,13 @@ export class SurfaceDetector extends EventTarget {
     if (delta > JUMP_M) {
       this.#startJump(_v3, pose.transform.orientation);
     } else {
-      const o = pose.transform.orientation;
       this.placedGroup.matrixAutoUpdate = true;
-      this.placedGroup.position.set(p.x, p.y, p.z);
-      this.placedGroup.quaternion.set(o.x, o.y, o.z, o.w);
+      // Lerp small corrections to smooth XR anchor noise; snap larger SLAM refinements
+      this.placedGroup.position.lerp(_v3, delta > 0.015 ? 0.6 : 0.25);
+      if (delta > 0.015) {
+        const o = pose.transform.orientation;
+        this.placedGroup.quaternion.set(o.x, o.y, o.z, o.w);
+      }
     }
 
     if (this.placedGroup.children.length > 0) this.placedGroup.visible = true;
@@ -746,61 +804,26 @@ export class SurfaceDetector extends EventTarget {
       .catch(err => console.warn(`[Surface] Anchor attempt ${this.#anchorRetries}/${ANCHOR_RETRY_N}:`, err));
   }
 
-  // ── Plane display ─────────────────────────────────────────────────────────
-
-  #updatePlanes(frame) {
-    const det = frame.detectedPlanes ?? new Set();
-    for (const [plane, mesh] of this.#planes) {
-      if (!det.has(plane)) {
-        this.#scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose();
-        this.#planes.delete(plane);
-      }
-    }
-    for (const plane of det) {
-      let mesh = this.#planes.get(plane);
-      if (!mesh) { mesh = this.#makePlaneMesh(plane); this.#scene.add(mesh); this.#planes.set(plane, mesh); }
-      const pp = frame.getPose(plane.planeSpace, this.#refSpace);
-      if (pp) { mesh.matrix.fromArray(pp.transform.matrix); mesh.matrixWorldNeedsUpdate = true; }
-      if (plane.lastChangedTime !== mesh.userData.ct) {
-        mesh.geometry.dispose();
-        mesh.geometry = this.#planeGeo(plane.polygon);
-        mesh.userData.ct = plane.lastChangedTime;
-      }
-    }
-  }
-
-  #makePlaneMesh(plane) {
-    const isH = plane.orientation === 'horizontal';
-    const mat = new THREE.MeshBasicMaterial({
-      color: isH ? PLANE_COLOR_H : PLANE_COLOR_V,
-      transparent: true, opacity: PLANE_OPACITY,
-      side: THREE.DoubleSide, depthWrite: false,
-    });
-    const mesh = new THREE.Mesh(this.#planeGeo(plane.polygon), mat);
-    mesh.matrixAutoUpdate = false; mesh.userData.ct = plane.lastChangedTime;
-    return mesh;
-  }
-
-  #planeGeo(polygon) {
-    const v = []; for (const p of polygon) v.push(p.x, p.y, p.z);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
-    const idx = []; for (let i = 1; i < polygon.length - 1; i++) idx.push(0, i, i + 1);
-    geo.setIndex(idx); geo.computeVertexNormals(); return geo;
-  }
-
   // ── Reticle & shadow ──────────────────────────────────────────────────────
 
   #buildReticle() {
+    // Gold placement indicator: ring + centre dot, themed to match the app
     const g = new THREE.Group();
-    const rg = new THREE.RingGeometry(RETICLE_R * 0.72, RETICLE_R, 36).rotateX(-Math.PI / 2);
-    g.add(new THREE.Mesh(rg, new THREE.MeshBasicMaterial({
-      color: COL_HIT, side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthWrite: false,
-    })));
-    const dg = new THREE.CircleGeometry(RETICLE_R * 0.14, 16).rotateX(-Math.PI / 2);
-    g.add(new THREE.Mesh(dg, new THREE.MeshBasicMaterial({ color: COL_HIT, depthWrite: false })));
-    g.matrixAutoUpdate = false; g.visible = false;
-    this.#reticle = g; this.#scene.add(g);
+
+    this.#reticleMat = new THREE.MeshBasicMaterial({
+      color: INDICATOR_COL, side: THREE.DoubleSide,
+      transparent: true, opacity: 0.8, depthWrite: false,
+    });
+    const ring = new THREE.RingGeometry(RETICLE_R * 0.72, RETICLE_R, 32).rotateX(-Math.PI / 2);
+    g.add(new THREE.Mesh(ring, this.#reticleMat));
+
+    const dot = new THREE.CircleGeometry(RETICLE_R * 0.12, 12).rotateX(-Math.PI / 2);
+    g.add(new THREE.Mesh(dot, new THREE.MeshBasicMaterial({ color: INDICATOR_COL, transparent: true, opacity: 0.9, depthWrite: false })));
+
+    g.matrixAutoUpdate = false;
+    g.visible = false;
+    this.#reticle = g;
+    this.#scene.add(g);
   }
 
   #buildShadow() {
@@ -840,11 +863,7 @@ export class SurfaceDetector extends EventTarget {
     this.#session = null; this.#refSpace = null;
     this.#placed = false; this.#jumpActive = false;
     this.placedGroup.matrixAutoUpdate = true;
-    for (const [, mesh] of this.#planes) {
-      this.#scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose();
-    }
-    this.#planes.clear();
-    if (this.#reticle) { this.#scene.remove(this.#reticle); this.#reticle = null; }
+    if (this.#reticle) { this.#scene.remove(this.#reticle); this.#reticle = null; this.#reticleMat = null; }
     if (this.#shadowPlane) {
       this.#shadowPlane.material.map?.dispose();
       this.#shadowPlane.geometry.dispose(); this.#shadowPlane.material.dispose();

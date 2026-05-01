@@ -8,6 +8,13 @@ export class UIController {
     this.infoCard = document.getElementById('info-card');
     this.loadingSpinner = document.getElementById('model-loading');
 
+    // Prev-value tracking — each section only runs when its slice of state changed.
+    this._prevIsMenuOpen   = null;
+    this._prevActiveDishId = null;
+    this._prevShowInfoCard = null;
+    this._prevIsLoading    = null;
+    this._activeCard       = null;  // cached DOM reference for the highlighted dish card
+
     this.bindEvents();
     subscribe(this.onStateChange.bind(this));
   }
@@ -19,22 +26,22 @@ export class UIController {
         setState({ isMenuOpen: !State.isMenuOpen });
       });
     }
-    
-    // Bottom sheet drag handles
+
     let startY = 0;
     if (this.bottomSheet) {
       this.bottomSheet.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
       this.bottomSheet.addEventListener('touchend', e => {
         const delta = e.changedTouches[0].clientY - startY;
-        if (delta > 50) setState({ isMenuOpen: false }); // Swiped down
-        else if (delta < -50) setState({ isMenuOpen: true }); // Swiped up
+        if (delta > 50) setState({ isMenuOpen: false });
+        else if (delta < -50) setState({ isMenuOpen: true });
       }, { passive: true });
     }
   }
 
   onStateChange(state) {
-    // Menu visibility
-    if (this.bottomSheet) {
+    // ── Section 1: menu sheet — guard on isMenuOpen ───────────────────────
+    if (this.bottomSheet && state.isMenuOpen !== this._prevIsMenuOpen) {
+      this._prevIsMenuOpen = state.isMenuOpen;
       if (state.isMenuOpen) {
         this.bottomSheet.classList.add('visible');
         this.bottomSheet.classList.remove('minimized');
@@ -42,32 +49,35 @@ export class UIController {
       } else {
         this.bottomSheet.classList.add('minimized');
         this.bottomSheet.classList.remove('visible');
-        // If an AR dish is active, show the info card again
         if (state.activeDishId) setState({ showInfoCard: true });
       }
     }
 
-    // Dish grid rendering
+    // ── Section 2: dish grid — render once ───────────────────────────────
     if (this.dishGrid && state.menuItems.length > 0 && !this.gridRendered) {
       this.renderMenu(state.menuItems);
       this.gridRendered = true;
     }
 
-    // Update active dish in menu
-    if (this.dishGrid) {
-      this.dishGrid.querySelectorAll('.dish-card').forEach(c => c.classList.remove('active'));
-      const activeCard = document.getElementById('dish-' + state.activeDishId);
-      if (activeCard) activeCard.classList.add('active');
+    // ── Section 3: active dish highlight — guard on activeDishId ─────────
+    if (this.dishGrid && state.activeDishId !== this._prevActiveDishId) {
+      this._prevActiveDishId = state.activeDishId;
+      if (this._activeCard) this._activeCard.classList.remove('active');
+      this._activeCard = state.activeDishId
+        ? document.getElementById('dish-' + state.activeDishId)
+        : null;
+      if (this._activeCard) this._activeCard.classList.add('active');
     }
 
-    // Info card visibility
-    if (this.infoCard) {
+    // ── Section 4: info card — guard on showInfoCard ──────────────────────
+    if (this.infoCard && state.showInfoCard !== this._prevShowInfoCard) {
+      this._prevShowInfoCard = state.showInfoCard;
       if (state.showInfoCard && !state.isMenuOpen && state.menuItems.length > 0) {
         const dish = state.menuItems[state.currentDishIndex];
         if (dish) {
-          this.infoCard.querySelector('.info-name').textContent = dish.name;
+          this.infoCard.querySelector('.info-name').textContent  = dish.name;
           this.infoCard.querySelector('.info-price').textContent = dish.price;
-          this.infoCard.querySelector('.info-desc').textContent = dish.desc;
+          this.infoCard.querySelector('.info-desc').textContent  = dish.desc;
           this.infoCard.classList.add('visible');
         }
       } else {
@@ -75,13 +85,12 @@ export class UIController {
       }
     }
 
-    // Loading Spinner
+    // ── Section 5: loading spinner — guard on loading state ──────────────
     if (this.loadingSpinner) {
-      if (state.activeDishId && !state.loadedDishes.has(state.activeDishId)) {
-        // Active dish is not loaded yet
-        this.loadingSpinner.classList.add('visible');
-      } else {
-        this.loadingSpinner.classList.remove('visible');
+      const isLoading = !!(state.activeDishId && !state.loadedDishes.has(state.activeDishId));
+      if (isLoading !== this._prevIsLoading) {
+        this._prevIsLoading = isLoading;
+        this.loadingSpinner.classList[isLoading ? 'add' : 'remove']('visible');
       }
     }
   }
@@ -106,6 +115,11 @@ export class UIController {
         if (this.onDishSelect) this.onDishSelect(id);
       });
     });
+
+    // Seed the cached active card reference after the grid is built
+    this._activeCard = State.activeDishId
+      ? document.getElementById('dish-' + State.activeDishId)
+      : null;
   }
 
   showInfoCard() {
