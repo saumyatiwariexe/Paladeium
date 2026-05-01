@@ -53,7 +53,8 @@ export class PreloadQueue {
       const box = new THREE.Box3().setFromObject(model);
       const sz = new THREE.Vector3();
       box.getSize(sz);
-      const scale = 0.18 / Math.max(sz.x, sz.y, sz.z);
+      let scale = 0.18 / Math.max(sz.x, sz.y, sz.z);
+      if (dish.modelScale) scale *= dish.modelScale;
       model.scale.setScalar(scale);
 
       const centre = new THREE.Vector3();

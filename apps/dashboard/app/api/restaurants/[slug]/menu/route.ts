@@ -15,6 +15,7 @@ const MenuItemSchema = z.object({
   newCategoryName: z.string().max(50).optional(),
   newCategoryEmoji: z.string().max(10).optional(),
   modelUrl: z.string().max(500).optional().default(''),
+  modelScale: z.number().min(0.001).max(10).optional(),
   hasAr: z.boolean().optional().default(false),
   dietaryTags: z.array(z.string().max(50)).max(10).optional().default([]),
   available: z.boolean().optional().default(true),
@@ -47,6 +48,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
         emoji: item.emoji || '🍽',
         cat: cat?.name.toLowerCase() ?? 'other',
         model: item.modelUrl || null,
+        modelScale: item.modelScale ?? null,
         hasAR: item.hasAr,
       }
     })
@@ -130,6 +132,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       emoji: data.emoji,
       imageUrl: data.imageUrl,
       modelUrl: data.modelUrl,
+      modelScale: data.modelScale,
       hasAr: data.hasAr,
       dietaryTags: data.dietaryTags,
       available: data.available,

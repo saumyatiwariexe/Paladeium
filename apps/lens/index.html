@@ -62,56 +62,7 @@
       height: 100% !important;
     }
 
-    /* ─── Engine Loader (Automated Feel) ─── */
-    #engine-loader {
-      position: fixed; inset: 0; z-index: 100;
-      background: var(--dark);
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      transition: opacity 0.5s ease;
-    }
-    #engine-loader.hidden {
-      opacity: 0; pointer-events: none;
-    }
-    .cube-wrapper {
-      width: 60px; height: 60px;
-      perspective: 800px;
-      margin-bottom: 30px;
-    }
-    .cube {
-      width: 100%; height: 100%;
-      position: relative;
-      transform-style: preserve-3d;
-      animation: spin-cube 3s infinite linear;
-    }
-    .cube-face {
-      position: absolute; width: 60px; height: 60px;
-      border: 2px solid var(--gold);
-      background: rgba(212, 168, 83, 0.1);
-      box-shadow: 0 0 15px rgba(212, 168, 83, 0.4) inset;
-    }
-    .cube-face.front  { transform: rotateY(  0deg) translateZ(30px); }
-    .cube-face.right  { transform: rotateY( 90deg) translateZ(30px); }
-    .cube-face.back   { transform: rotateY(180deg) translateZ(30px); }
-    .cube-face.left   { transform: rotateY(-90deg) translateZ(30px); }
-    .cube-face.top    { transform: rotateX( 90deg) translateZ(30px); }
-    .cube-face.bottom { transform: rotateX(-90deg) translateZ(30px); }
-    @keyframes spin-cube {
-      0% { transform: rotateX(-20deg) rotateY(0deg); }
-      100% { transform: rotateX(-20deg) rotateY(360deg); }
-    }
-    .engine-text {
-      color: var(--text); font-size: 16px; font-weight: 500; letter-spacing: 1px;
-      margin-bottom: 20px;
-    }
-    .engine-btn {
-      background: var(--gold); color: var(--dark);
-      border: none; padding: 12px 30px; border-radius: 30px;
-      font-size: 15px; font-weight: 700; cursor: pointer;
-      box-shadow: 0 4px 20px rgba(212, 168, 83, 0.4);
-      transition: transform 0.2s;
-    }
-    .engine-btn:active { transform: scale(0.95); }
-    .engine-btn.hidden { display: none; }
+
     
     /* ─── Info Card ─── */
     #info-card {
@@ -494,21 +445,7 @@
     </div>
   </div>
 
-  <!-- Engine Loader -->
-  <div id="engine-loader">
-    <div class="cube-wrapper">
-      <div class="cube">
-        <div class="cube-face front"></div>
-        <div class="cube-face back"></div>
-        <div class="cube-face right"></div>
-        <div class="cube-face left"></div>
-        <div class="cube-face top"></div>
-        <div class="cube-face bottom"></div>
-      </div>
-    </div>
-    <div class="engine-text" id="engine-status">Ready to Launch</div>
-    <button class="engine-btn" id="start-engine-btn">Enter AR Menu</button>
-  </div>
+
 
   <!-- No-anchor prompt -->
   <div id="no-anchor-msg">
@@ -609,6 +546,7 @@
                 emoji: item.emoji ?? '',
                 cat:   (item.categoryId ?? item.cat ?? 'mains').toLowerCase(),
                 model: item.modelUrl ?? item.model ?? null,
+                modelScale: item.modelScale ?? 1.0,
                 hasAR: item.hasAr ?? item.hasAR ?? false,
               }));
             }
@@ -625,25 +563,51 @@
     async function init() {
       await fetchMenu();
 
-      const loader = document.getElementById('engine-loader');
-      const btn = document.getElementById('start-engine-btn');
-      const statusText = document.getElementById('engine-status');
+      // Setup camera background
+      const video = document.createElement('video');
+      video.autoplay = true; video.muted = true; video.playsInline = true;
+      video.style.position = 'fixed';
+      video.style.top = '0'; video.style.left = '0';
+      video.style.width = '100%'; video.style.height = '100%';
+      video.style.objectFit = 'cover';
+      video.style.zIndex = '-1';
+      document.body.appendChild(video);
       
-      btn.addEventListener('click', async () => {
-        btn.classList.add('hidden');
-        statusText.textContent = 'Initialising 3D Engine...';
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+      } catch(e) {
+        console.warn('Camera preview failed', e);
+      }
+      
+      // Show skeleton initially
+      const modelLoading = document.getElementById('model-loading');
+      if (modelLoading) modelLoading.classList.add('visible');
+
+      const statusText = document.getElementById('status-text');
+      let arStarted = false;
+
+      const startAR = async () => {
+        if(arStarted) return;
+        arStarted = true;
+        statusText.textContent = 'Starting AR...';
         
         try {
           const arManager = new ARSessionManager();
           await arManager.start();
-          loader.classList.add('hidden');
+          if (video.srcObject) {
+            video.srcObject.getTracks().forEach(t => t.stop());
+          }
+          video.remove();
         } catch (e) {
           console.error(e);
           alert('Failed to start AR: ' + e.message);
-          btn.classList.remove('hidden');
-          statusText.textContent = 'AR Failed. Try again.';
         }
-      });
+      };
+
+      // Trigger WebXR on any first interaction
+      document.addEventListener('touchstart', startAR, { once: true, capture: true });
+      document.addEventListener('click', startAR, { once: true, capture: true });
     }
 
     init();

@@ -11,6 +11,7 @@ const ItemUpdateSchema = z.object({
   emoji: z.string().max(10).optional(),
   categoryId: z.string().optional(),
   modelUrl: z.string().max(500).optional(),
+  modelScale: z.number().min(0.001).max(10).optional(),
   hasAr: z.boolean().optional(),
   dietaryTags: z.array(z.string().max(50)).max(10).optional(),
   available: z.boolean().optional(),

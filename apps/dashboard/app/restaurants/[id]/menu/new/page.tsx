@@ -9,7 +9,7 @@ interface Category { id: string; name: string; emoji: string }
 interface ItemData {
   name: string; description: string; price: string; emoji: string
   categoryId: string; newCategoryName: string; newCategoryEmoji: string
-  modelUrl: string; hasAr: boolean; dietaryTags: string[]; available: boolean
+  modelUrl: string; modelScale: string; hasAr: boolean; dietaryTags: string[]; available: boolean
 }
 
 async function safeJson(res: Response) {
@@ -31,7 +31,7 @@ export default function NewMenuItemPage() {
   const [form, setForm] = useState<ItemData>({
     name: '', description: '', price: '', emoji: '',
     categoryId: '', newCategoryName: '', newCategoryEmoji: '',
-    modelUrl: '', hasAr: false, dietaryTags: [], available: true,
+    modelUrl: '', modelScale: '', hasAr: false, dietaryTags: [], available: true,
   })
 
   useEffect(() => {
@@ -50,12 +50,13 @@ export default function NewMenuItemPage() {
       fetch(`/api/restaurants/${id}/menu/${editId}`)
         .then(r => safeJson(r))
         .then((item: unknown) => {
-          const i = item as { name?: string; description?: string; price?: number; emoji?: string; categoryId?: string; modelUrl?: string; hasAr?: boolean; dietaryTags?: string[]; available?: boolean }
+          const i = item as { name?: string; description?: string; price?: number; emoji?: string; categoryId?: string; modelUrl?: string; modelScale?: number; hasAr?: boolean; dietaryTags?: string[]; available?: boolean }
           if (i?.name) {
             setForm(f => ({
               ...f,
               name: i.name!, description: i.description ?? '', price: String(i.price ?? ''),
               emoji: i.emoji ?? '', categoryId: i.categoryId ?? '', modelUrl: i.modelUrl ?? '',
+              modelScale: i.modelScale !== undefined && i.modelScale !== null ? String(i.modelScale) : '',
               hasAr: i.hasAr ?? false, dietaryTags: i.dietaryTags ?? [], available: i.available ?? true,
             }))
           }
@@ -88,6 +89,7 @@ export default function NewMenuItemPage() {
       newCategoryName: form.newCategoryName.trim(),
       newCategoryEmoji: form.newCategoryEmoji.trim(),
       modelUrl: form.modelUrl.trim(),
+      modelScale: form.modelScale ? Number(form.modelScale) : undefined,
       hasAr: form.hasAr,
       dietaryTags: form.dietaryTags,
       available: form.available,
@@ -265,9 +267,20 @@ export default function NewMenuItemPage() {
                 value={form.modelUrl}
                 onChange={e => setForm(f => ({ ...f, modelUrl: e.target.value }))}
                 placeholder="burger.glb or https://cdn.example.com/model.glb"
-                className="w-full px-4 py-2.5 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 font-mono"
+                className="w-full px-4 py-2.5 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 font-mono mb-3"
               />
-              <p className="text-white/25 text-[10px] mt-1">Place GLB in <code className="font-mono">lens/models/{id}/</code> and enter the filename, or paste a full URL.</p>
+              <p className="text-white/25 text-[10px] mt-1 mb-4">Place GLB in <code className="font-mono">lens/models/{id}/</code> and enter the filename, or paste a full URL.</p>
+
+              <label className="block text-xs text-white/40 font-medium mb-1.5">Model Scale</label>
+              <input
+                type="number"
+                step="0.001"
+                value={form.modelScale}
+                onChange={e => setForm(f => ({ ...f, modelScale: e.target.value }))}
+                placeholder="e.g. 1.0"
+                className="w-32 px-4 py-2.5 text-xs rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-white/20 font-mono"
+              />
+              <p className="text-white/25 text-[10px] mt-1">Scale multiplier for the AR dish. Default is auto-scaled.</p>
             </div>
           )}
         </div>

@@ -31,6 +31,7 @@ export interface MenuItem {
   emoji: string
   imageUrl: string
   modelUrl: string
+  modelScale?: number
   hasAr: boolean
   dietaryTags: string[]
   available: boolean
@@ -52,6 +53,7 @@ export interface LensMenuItem {
   emoji: string
   cat: string
   model: string | null
+  modelScale?: number | null
   hasAR: boolean
 }
 
