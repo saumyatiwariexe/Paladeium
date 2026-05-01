@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'; // Optional if available
 import { SurfaceDetector } from './SurfaceDetector.js';
-import { State, setState, subscribe } from './StateManager.js';
+import { State, setState } from './StateManager.js';
 import { PreloadQueue } from './PreloadQueue.js';
 import { DishManager } from './DishManager.js';
 import { GestureController } from './GestureController.js';
@@ -67,7 +67,7 @@ export class ARSessionManager {
           this.uiController.showInfoCard();
         }
       },
-      onDrag: (dx, dy) => {
+      onDrag: (dx, _dy) => {
         if (this.dishManager.currentModel) {
           this.dishManager.currentModel.rotation.y += dx * 0.01;
         }
@@ -117,15 +117,36 @@ export class ARSessionManager {
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
+    const statusText      = document.getElementById('status-text');
+    const anchorStatus    = document.getElementById('anchor-status');
+    const tapHint         = document.getElementById('surface-tap-hint');
+    const hintText        = document.getElementById('surface-hint-text');
+    const surfaceControls = document.getElementById('surface-controls');
+
+    this.surfaceDetector.addEventListener('warming', e => {
+      if (statusText) statusText.textContent = `Scanning… ${Math.round(e.progress * 100)}%`;
+      if (tapHint) tapHint.classList.add('visible');
+      if (hintText) hintText.textContent = 'Scanning surface…';
+    });
+
+    this.surfaceDetector.addEventListener('ready', () => {
+      if (statusText) statusText.textContent = 'Tap to place';
+      if (hintText) hintText.textContent = 'Tap surface to place';
+    });
+
     this.surfaceDetector.addEventListener('surface', e => {
-      if (e.found && !this.surfaceDetector.isPlaced && State.menuItems.length > 0) {
-        // Place instantly upon first surface detection
-        this.surfaceDetector.requestPlacement();
+      if (e.found && !this.surfaceDetector.isPlaced) {
+        if (anchorStatus) anchorStatus.classList.add('found');
+        if (tapHint) tapHint.classList.add('visible');
       }
     });
 
     this.surfaceDetector.addEventListener('placed', () => {
       setState({ anchorPlaced: true });
+      if (tapHint) tapHint.classList.remove('visible');
+      if (surfaceControls) surfaceControls.style.display = 'flex';
+      if (statusText) statusText.textContent = 'AR Active';
+      if (anchorStatus) anchorStatus.classList.add('found');
       if (State.menuItems.length > 0) {
         this.dishManager.switchDish(0, 0);
       }
@@ -133,24 +154,33 @@ export class ARSessionManager {
         this.showTutorial();
       }
     });
+
+    this.surfaceDetector.addEventListener('reset', () => {
+      if (tapHint) tapHint.classList.add('visible');
+      if (hintText) hintText.textContent = this.surfaceDetector.slamReady ? 'Tap surface to place' : 'Scanning surface…';
+      if (surfaceControls) surfaceControls.style.display = 'none';
+      if (statusText) statusText.textContent = 'Tap to place';
+      if (anchorStatus) anchorStatus.classList.remove('found');
+    });
   }
 
   async start() {
-    try {
-      this.renderer.setAnimationLoop((time, frame) => {
-        if (this.surfaceDetector) this.surfaceDetector.tick(frame, time);
-        
-        if (this.dishManager.currentModel?.userData.baseY !== undefined) {
-          const t = performance.now() / 1000;
-          this.dishManager.currentModel.position.y = this.dishManager.currentModel.userData.baseY + Math.sin(t * 1.2) * 0.006;
-        }
+    this.renderer.setAnimationLoop((time, frame) => {
+      if (this.surfaceDetector) this.surfaceDetector.tick(frame, time);
 
-        this.renderer.render(this.scene, this.camera);
-      });
+      // surface event fires only on transitions, so poll here for auto-placement
+      if (!this.surfaceDetector.isPlaced && this.surfaceDetector.surfaceFound && State.menuItems.length > 0) {
+        this.surfaceDetector.requestPlacement();
+      }
 
-      await this.surfaceDetector.start(document.body);
-    } catch (err) {
-      console.error('Failed to start WebXR session:', err);
-    }
+      if (this.dishManager.currentModel?.userData.baseY !== undefined) {
+        const t = performance.now() / 1000;
+        this.dishManager.currentModel.position.y = this.dishManager.currentModel.userData.baseY + Math.sin(t * 1.2) * 0.006;
+      }
+
+      this.renderer.render(this.scene, this.camera);
+    });
+
+    await this.surfaceDetector.start(document.body);
   }
 }

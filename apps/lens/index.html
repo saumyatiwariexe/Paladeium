@@ -588,7 +588,7 @@
         if(arStarted) return;
         arStarted = true;
         statusText.textContent = 'Starting AR...';
-        
+
         try {
           // MUST release camera hardware before WebXR can use it!
           if (video.srcObject) {
@@ -596,13 +596,17 @@
           }
           video.remove();
 
-          const arManager = new ARSessionManager();
-          await arManager.start();
-          statusText.textContent = 'Scanning for surfaces...';
+          window._arManager = new ARSessionManager();
+          await window._arManager.start();
         } catch (e) {
+          arStarted = false;
           console.error(e);
-          alert('Failed to start AR: ' + e.message);
+          alert('AR failed: ' + e.message);
         }
+      };
+
+      window.repositionSurface = function() {
+        if (window._arManager) window._arManager.surfaceDetector.resetPlacement();
       };
 
       // Trigger WebXR on any first interaction
