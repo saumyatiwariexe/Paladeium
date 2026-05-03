@@ -542,26 +542,14 @@
       color: var(--gold); letter-spacing: 0.8px;
     }
     .dynamic-brand span { color: var(--text); font-weight: 300; }
-    #dynamic-menu-btn {
-      background: var(--card-bg);
-      backdrop-filter: blur(16px);
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      padding: 8px 18px;
-      font-size: 12px; font-weight: 600;
-      color: var(--muted);
-      cursor: pointer;
-      pointer-events: auto;
-      transition: all 0.2s ease;
-    }
-    #dynamic-menu-btn:active { transform: scale(0.96); }
+    #dynamic-menu-btn { display: none; }
 
-    /* Dish info card centered below 3D viewer */
+    /* Dish info card — sits above the minimized menu (130px) */
     #dynamic-dish-info {
       position: absolute;
-      bottom: 200px; left: 50%;
+      bottom: 148px; left: 50%;
       transform: translateX(-50%);
-      width: 90%; max-width: 340px;
+      width: 92%; max-width: 360px;
       background: var(--card-bg);
       backdrop-filter: blur(24px) saturate(160%);
       border: 1px solid var(--border);
@@ -621,10 +609,10 @@
     }
     #dynamic-add-cart-btn:active { transform: scale(0.97); }
 
-    /* Prev/Next navigation */
+    /* Prev/Next navigation — above minimized menu */
     #dynamic-nav {
       position: absolute;
-      bottom: 158px; left: 50%;
+      bottom: 110px; left: 50%;
       transform: translateX(-50%);
       display: flex; align-items: center; gap: 16px;
       pointer-events: auto;
@@ -677,9 +665,9 @@
     #dynamic-empty.visible { opacity: 1; }
     #dynamic-empty .empty-icon { font-size: 48px; margin-bottom: 16px; }
 
-    /* No model hint */
+    /* No model hint — above info card */
     #dynamic-no-model {
-      position: absolute; bottom: 295px; left: 50%;
+      position: absolute; bottom: 340px; left: 50%;
       transform: translateX(-50%);
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -691,36 +679,54 @@
     }
     #dynamic-no-model.visible { opacity: 1; }
 
-    /* Dynamic menu panel (bottom sheet) */
+    /* Dynamic menu panel — three states: hidden / minimized / open */
     #dynamic-menu-panel {
       position: fixed; bottom: 0; left: 0; right: 0;
       z-index: 50;
+      /* default: fully hidden below screen */
       transform: translateY(100%);
-      transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-      padding: 0 12px 20px;
+      transition: transform 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+      padding: 0 10px 16px;
       pointer-events: auto;
-      max-height: 78vh;
-      overflow: hidden;
     }
-    #dynamic-menu-panel.visible { transform: translateY(0); }
+    /* minimized: peeks ~130px from the bottom showing handle + category pills */
+    #dynamic-menu-panel.minimized {
+      transform: translateY(calc(100% - 130px));
+    }
+    /* open: fully expanded */
+    #dynamic-menu-panel.open {
+      transform: translateY(0);
+    }
     .dynamic-menu-card {
-      background: var(--card-bg);
-      backdrop-filter: blur(28px) saturate(160%);
+      background: rgba(8, 8, 18, 0.92);
+      backdrop-filter: blur(30px) saturate(160%);
+      -webkit-backdrop-filter: blur(30px) saturate(160%);
       border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 20px 18px 16px;
-      box-shadow: 0 -8px 48px rgba(0,0,0,0.7);
-      max-height: calc(78vh - 40px);
+      border-radius: 22px;
+      padding: 0 16px 16px;
+      box-shadow: 0 -8px 48px rgba(0,0,0,0.75);
+      max-height: 72vh;
       overflow-y: auto;
     }
     .dynamic-menu-card::-webkit-scrollbar { display: none; }
+
+    /* Drag handle area — always tappable even when minimized */
+    #dynamic-menu-handle-area {
+      width: 100%; padding: 10px 0 6px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      cursor: pointer;
+    }
+    .dynamic-handle-bar {
+      width: 38px; height: 4px; border-radius: 2px;
+      background: rgba(212,168,83,0.35);
+    }
     .dynamic-menu-header {
       display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 16px;
+      padding-bottom: 14px;
     }
     .dynamic-menu-header h3 {
       font-family: 'Playfair Display', serif;
-      font-size: 20px; font-weight: 700; color: var(--text);
+      font-size: 19px; font-weight: 700; color: var(--text);
     }
     #dynamic-menu-close {
       background: rgba(255,255,255,0.06);
@@ -730,6 +736,11 @@
       font-size: 12px; color: var(--muted);
       cursor: pointer;
     }
+    /* Dish grid inside menu scrolls freely */
+    #dynamic-dish-grid {
+      overflow-y: auto; max-height: 52vh;
+    }
+    #dynamic-dish-grid::-webkit-scrollbar { display: none; }
 
     /* ═══════════════════════════════════════════════
        CART UI
@@ -1123,7 +1134,6 @@
   <div id="dynamic-ui">
     <div id="dynamic-header">
       <div class="dynamic-brand">Paladeium<span> Lens</span></div>
-      <button id="dynamic-menu-btn">☰ Menu</button>
     </div>
 
     <!-- 3D model loading skeleton -->
@@ -1168,15 +1178,16 @@
     </div>
   </div>
 
-  <!-- Dynamic menu panel (bottom sheet, all dishes) -->
+  <!-- Dynamic menu panel (bottom sheet — minimized by default, all dishes) -->
   <div id="dynamic-menu-panel">
-    <div class="menu-handle-container">
-      <div class="menu-handle"></div>
-    </div>
     <div class="dynamic-menu-card">
-      <div class="dynamic-menu-header">
-        <h3>Our Menu</h3>
-        <button id="dynamic-menu-close">Close</button>
+      <!-- Tappable handle area expands/collapses the panel -->
+      <div id="dynamic-menu-handle-area">
+        <div class="dynamic-handle-bar"></div>
+        <div class="dynamic-menu-header" style="width:100%;margin:0;">
+          <h3>Full Menu</h3>
+          <button id="dynamic-menu-close">Done</button>
+        </div>
       </div>
       <div class="categories" id="dynamic-categories">
         <button class="cat-pill active" data-cat="all">All</button>
@@ -1388,6 +1399,14 @@
       const splash = document.getElementById('splash-screen');
       if (splash) splash.classList.add('hidden');
 
+      // Hide all AR-mode UI so they don't bleed through
+      const arHide = ['status-bar','no-anchor-msg','scan-ring','surface-tap-hint',
+                      'model-loading','tutorial-overlay','info-card','ar-hint','menu-panel'];
+      arHide.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+
       // Show Dynamic container and UI
       const dynContainer = document.getElementById('dynamic-container');
       const dynUI        = document.getElementById('dynamic-ui');
@@ -1413,7 +1432,7 @@
           const dynMenu      = document.getElementById('dynamic-menu-panel');
           if (dynContainer) dynContainer.style.display = 'none';
           if (dynUI)        dynUI.style.display        = 'none';
-          if (dynMenu)      dynMenu.classList.remove('visible');
+          if (dynMenu)      dynMenu.style.display      = 'none';
           launchAR(dishIndex);
         },
         onAddToCart: (item) => {
