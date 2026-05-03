@@ -1,5 +1,7 @@
 export type RestaurantStatus = 'active' | 'inactive' | 'pending' | 'pendingDeletion'
 
+export type UIType = 'ar' | 'dynamic'
+
 export interface Restaurant {
   id: string
   name: string
@@ -9,6 +11,8 @@ export interface Restaurant {
   targetsUrl: string | null
   markerDetectionEnabled?: boolean
   arOverlayEnabled?: boolean
+  uiType?: UIType
+  paymentEnabled?: boolean
   deleteAt?: string | null
   createdAt: string
   updatedAt: string
@@ -39,10 +43,35 @@ export interface MenuItem {
   createdAt: string
 }
 
+export interface OrderItem {
+  id: string
+  name: string
+  price: string
+  qty: number
+}
+
+export interface Order {
+  id: string
+  restaurantId: string
+  restaurantSlug: string
+  customer: {
+    name: string
+    phone: string
+    address: string
+    gender: string
+    age: number
+  }
+  items: OrderItem[]
+  total: number
+  status: 'pending' | 'confirmed' | 'rejected'
+  createdAt: string
+}
+
 export interface Database {
   restaurants: Restaurant[]
   categories: MenuCategory[]
   items: MenuItem[]
+  orders: Order[]
 }
 
 // Shape consumed by the AR Lens
@@ -67,6 +96,8 @@ export interface LensMenuResponse {
     currency: string
     markerDetectionEnabled: boolean
     arOverlayEnabled: boolean
+    uiType: UIType
+    paymentEnabled: boolean
   }
   menu: LensMenuItem[]
   categories: Array<{ id: string; name: string; emoji: string }>

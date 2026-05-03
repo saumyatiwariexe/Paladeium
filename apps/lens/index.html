@@ -503,6 +503,519 @@
       transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
     #open-menu-btn:active { transform: scale(0.96); box-shadow: 0 2px 16px rgba(212,168,83,0.25); }
+
+    /* ═══════════════════════════════════════════════
+       DYNAMIC UI MODE
+    ═══════════════════════════════════════════════ */
+
+    /* Dark gradient background for Dynamic mode */
+    #dynamic-container {
+      position: fixed; inset: 0;
+      z-index: 0;
+      background: radial-gradient(ellipse at 50% 30%, #1a1020 0%, #0A0A0F 70%);
+      display: none;
+    }
+    #dynamic-container canvas {
+      position: absolute; inset: 0;
+      width: 100% !important; height: 100% !important;
+    }
+
+    /* Dynamic UI overlay layer */
+    #dynamic-ui {
+      display: none;
+      position: fixed; inset: 0;
+      z-index: 10;
+      pointer-events: none;
+    }
+    #dynamic-ui.active { display: block; }
+
+    /* Brand header for Dynamic mode */
+    #dynamic-header {
+      position: absolute; top: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px;
+      pointer-events: auto;
+    }
+    .dynamic-brand {
+      font-family: 'Playfair Display', serif;
+      font-size: 17px; font-weight: 700;
+      color: var(--gold); letter-spacing: 0.8px;
+    }
+    .dynamic-brand span { color: var(--text); font-weight: 300; }
+    #dynamic-menu-btn {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 8px 18px;
+      font-size: 12px; font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      pointer-events: auto;
+      transition: all 0.2s ease;
+    }
+    #dynamic-menu-btn:active { transform: scale(0.96); }
+
+    /* Dish info card centered below 3D viewer */
+    #dynamic-dish-info {
+      position: absolute;
+      bottom: 200px; left: 50%;
+      transform: translateX(-50%);
+      width: 90%; max-width: 340px;
+      background: var(--card-bg);
+      backdrop-filter: blur(24px) saturate(160%);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 20px 22px 16px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+      pointer-events: auto;
+    }
+    .dynamic-dish-top {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 10px;
+    }
+    #dynamic-dish-emoji {
+      font-size: 36px; flex-shrink: 0;
+    }
+    .dynamic-dish-meta { flex: 1; min-width: 0; }
+    #dynamic-dish-name {
+      font-size: 17px; font-weight: 700; color: var(--text);
+      line-height: 1.2; margin-bottom: 3px;
+    }
+    #dynamic-dish-price {
+      font-size: 16px; font-weight: 700; color: var(--gold);
+      font-family: 'Playfair Display', serif;
+    }
+    #dynamic-dish-desc {
+      font-size: 12px; color: var(--muted); line-height: 1.45;
+      margin-bottom: 14px;
+    }
+    .dynamic-dish-actions {
+      display: flex; gap: 10px;
+    }
+    #dynamic-view-ar-btn {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      background: var(--gold);
+      color: #0A0A0F;
+      border: none; border-radius: 14px;
+      padding: 13px 16px;
+      font-size: 13px; font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    #dynamic-view-ar-btn:active { transform: scale(0.97); }
+    #dynamic-add-cart-btn {
+      flex: 1;
+      display: none; align-items: center; justify-content: center; gap: 8px;
+      background: rgba(212,168,83,0.12);
+      color: var(--gold);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 13px 16px;
+      font-size: 13px; font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    #dynamic-add-cart-btn:active { transform: scale(0.97); }
+
+    /* Prev/Next navigation */
+    #dynamic-nav {
+      position: absolute;
+      bottom: 158px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; align-items: center; gap: 16px;
+      pointer-events: auto;
+    }
+    .dynamic-nav-btn {
+      width: 38px; height: 38px;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .dynamic-nav-btn:active { transform: scale(0.93); }
+    #dynamic-dots {
+      display: flex; gap: 7px; align-items: center;
+    }
+    .nav-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: rgba(212,168,83,0.25);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .nav-dot.active {
+      background: var(--gold);
+      transform: scale(1.3);
+    }
+
+    /* Dynamic model loading */
+    #dynamic-model-loading {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 20;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    #dynamic-model-loading.visible { opacity: 1; }
+
+    /* Empty state */
+    #dynamic-empty {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center; color: var(--muted);
+      font-size: 14px; opacity: 0;
+      transition: opacity 0.4s ease;
+      pointer-events: none;
+    }
+    #dynamic-empty.visible { opacity: 1; }
+    #dynamic-empty .empty-icon { font-size: 48px; margin-bottom: 16px; }
+
+    /* No model hint */
+    #dynamic-no-model {
+      position: absolute; bottom: 295px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 8px 20px;
+      font-size: 12px; color: var(--muted);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    #dynamic-no-model.visible { opacity: 1; }
+
+    /* Dynamic menu panel (bottom sheet) */
+    #dynamic-menu-panel {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      z-index: 50;
+      transform: translateY(100%);
+      transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+      padding: 0 12px 20px;
+      pointer-events: auto;
+      max-height: 78vh;
+      overflow: hidden;
+    }
+    #dynamic-menu-panel.visible { transform: translateY(0); }
+    .dynamic-menu-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(28px) saturate(160%);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 20px 18px 16px;
+      box-shadow: 0 -8px 48px rgba(0,0,0,0.7);
+      max-height: calc(78vh - 40px);
+      overflow-y: auto;
+    }
+    .dynamic-menu-card::-webkit-scrollbar { display: none; }
+    .dynamic-menu-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .dynamic-menu-header h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 20px; font-weight: 700; color: var(--text);
+    }
+    #dynamic-menu-close {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 50px;
+      padding: 5px 14px;
+      font-size: 12px; color: var(--muted);
+      cursor: pointer;
+    }
+
+    /* ═══════════════════════════════════════════════
+       CART UI
+    ═══════════════════════════════════════════════ */
+
+    /* Cart FAB */
+    #cart-fab {
+      position: fixed; bottom: 28px; right: 20px;
+      z-index: 45;
+      width: 54px; height: 54px;
+      background: var(--gold);
+      border: none; border-radius: 50%;
+      display: none; align-items: center; justify-content: center;
+      font-size: 22px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(212,168,83,0.45);
+      transition: transform 0.15s ease;
+    }
+    #cart-fab.visible { display: flex; }
+    #cart-fab:active { transform: scale(0.93); }
+    #cart-badge {
+      position: absolute; top: -4px; right: -4px;
+      min-width: 20px; height: 20px;
+      background: #ff4444; color: #fff;
+      border-radius: 10px;
+      font-size: 11px; font-weight: 700;
+      display: none; align-items: center; justify-content: center;
+      padding: 0 5px;
+    }
+
+    /* Cart toast */
+    #cart-toast {
+      position: fixed; bottom: 100px; left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      z-index: 80;
+      background: rgba(20,20,30,0.95);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 10px 22px;
+      font-size: 13px; font-weight: 500; color: var(--text);
+      opacity: 0;
+      transition: all 0.3s ease;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #cart-toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Cart panel */
+    #cart-panel {
+      position: fixed; inset: 0;
+      z-index: 100;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      display: flex; align-items: flex-end;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    #cart-panel.visible { opacity: 1; pointer-events: auto; }
+    .cart-sheet {
+      width: 100%;
+      background: #0f0f1a;
+      border-top: 1px solid var(--border);
+      border-radius: 24px 24px 0 0;
+      padding: 24px 20px 36px;
+      max-height: 80vh;
+      overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    #cart-panel.visible .cart-sheet { transform: translateY(0); }
+    .cart-sheet::-webkit-scrollbar { display: none; }
+    .cart-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .cart-header h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; font-weight: 700; color: var(--text);
+    }
+    #cart-panel-close {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 50px;
+      padding: 6px 16px;
+      font-size: 12px; color: var(--muted);
+      cursor: pointer;
+    }
+    .cart-empty {
+      text-align: center; color: var(--muted);
+      font-size: 14px; padding: 30px 0;
+    }
+    .cart-item-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .cart-item-emoji { font-size: 28px; flex-shrink: 0; }
+    .cart-item-info { flex: 1; min-width: 0; }
+    .cart-item-name { font-size: 14px; font-weight: 600; color: var(--text); }
+    .cart-item-price { font-size: 13px; color: var(--gold); font-family: 'Playfair Display', serif; margin-top: 2px; }
+    .cart-qty-control {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 5px 12px;
+    }
+    .qty-btn {
+      background: none; border: none;
+      font-size: 18px; color: var(--gold);
+      cursor: pointer; line-height: 1;
+      padding: 0 2px;
+    }
+    .qty-val { font-size: 14px; font-weight: 600; color: var(--text); min-width: 18px; text-align: center; }
+    .cart-footer {
+      margin-top: 20px;
+    }
+    .cart-total-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+    }
+    .cart-total-label { font-size: 14px; color: var(--muted); }
+    #cart-total-amount { font-size: 20px; font-weight: 700; color: var(--text); font-family: 'Playfair Display', serif; }
+    #cart-checkout-btn {
+      width: 100%;
+      background: var(--gold); color: #0A0A0F;
+      border: none; border-radius: 16px;
+      padding: 16px;
+      font-size: 15px; font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    #cart-checkout-btn:active { transform: scale(0.98); }
+
+    /* Checkout panel */
+    #checkout-panel {
+      position: fixed; inset: 0;
+      z-index: 110;
+      background: #0A0A0F;
+      overflow-y: auto;
+      transform: translateX(100%);
+      transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    #checkout-panel.visible { transform: translateX(0); }
+    .checkout-inner {
+      padding: 28px 22px 48px;
+      min-height: 100%;
+    }
+    .checkout-back {
+      display: flex; align-items: center; gap: 8px;
+      background: none; border: none;
+      color: var(--muted); font-size: 14px;
+      cursor: pointer; margin-bottom: 24px;
+      padding: 0;
+    }
+    .checkout-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 26px; font-weight: 700; color: var(--text);
+      margin-bottom: 6px;
+    }
+    .checkout-subtitle { font-size: 12px; color: var(--muted); margin-bottom: 28px; }
+    .checkout-field {
+      margin-bottom: 16px;
+    }
+    .checkout-field label {
+      display: block; font-size: 11px; font-weight: 600;
+      color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+    .checkout-field input,
+    .checkout-field select {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 14px; color: var(--text);
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      transition: border-color 0.2s ease;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .checkout-field input:focus,
+    .checkout-field select:focus {
+      border-color: var(--gold);
+    }
+    .checkout-field select option { background: #0f0f1a; color: var(--text); }
+    .checkout-total-box {
+      background: rgba(212,168,83,0.06);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 18px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin: 24px 0;
+    }
+    .checkout-total-label { font-size: 13px; color: var(--muted); }
+    #checkout-total-display { font-size: 22px; font-weight: 700; color: var(--gold); font-family: 'Playfair Display', serif; }
+    #checkout-form-error {
+      display: none; color: #ff6b6b;
+      font-size: 13px; margin-bottom: 12px;
+    }
+    #checkout-submit-btn {
+      width: 100%;
+      background: var(--gold); color: #0A0A0F;
+      border: none; border-radius: 16px;
+      padding: 17px;
+      font-size: 15px; font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    #checkout-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    #checkout-submit-btn:active:not(:disabled) { transform: scale(0.98); }
+
+    /* Order success screen */
+    #order-success-screen {
+      position: fixed; inset: 0;
+      z-index: 120;
+      background: #0A0A0F;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; text-align: center;
+      padding: 40px 32px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    #order-success-screen.visible { opacity: 1; pointer-events: auto; }
+    .success-icon { font-size: 72px; margin-bottom: 24px; }
+    .success-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 30px; font-weight: 700; color: var(--text);
+      margin-bottom: 10px;
+    }
+    .success-subtitle { font-size: 14px; color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
+    #order-success-num {
+      font-size: 13px; font-weight: 600;
+      color: var(--gold);
+      background: rgba(212,168,83,0.08);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 6px 20px;
+      margin: 16px 0 32px;
+      display: inline-block;
+    }
+    #order-done-btn {
+      background: var(--gold); color: #0A0A0F;
+      border: none; border-radius: 50px;
+      padding: 16px 56px;
+      font-size: 15px; font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+    }
+
+    /* Order error screen */
+    #order-error-screen {
+      position: fixed; inset: 0;
+      z-index: 120;
+      background: #0A0A0F;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; text-align: center;
+      padding: 40px 32px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    #order-error-screen.visible { opacity: 1; pointer-events: auto; }
+    .error-icon { font-size: 64px; margin-bottom: 24px; }
+    .error-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 26px; font-weight: 700; color: var(--text);
+      margin-bottom: 10px;
+    }
+    .error-subtitle { font-size: 14px; color: var(--muted); margin-bottom: 32px; line-height: 1.5; }
+    #order-retry-btn {
+      background: rgba(212,168,83,0.1);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      padding: 16px 48px;
+      font-size: 15px; font-weight: 600;
+      color: var(--gold);
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -601,70 +1114,261 @@
     </div>
   </div>
 
+  <!-- ═══ DYNAMIC UI MODE ═══ -->
+
+  <!-- Three.js canvas for Dynamic mode -->
+  <div id="dynamic-container"></div>
+
+  <!-- Dynamic overlay UI (info card, nav, buttons) -->
+  <div id="dynamic-ui">
+    <div id="dynamic-header">
+      <div class="dynamic-brand">Paladeium<span> Lens</span></div>
+      <button id="dynamic-menu-btn">☰ Menu</button>
+    </div>
+
+    <!-- 3D model loading skeleton -->
+    <div id="dynamic-model-loading">
+      <div class="skeleton-card">
+        <div class="skeleton-image"></div>
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line short"></div>
+      </div>
+    </div>
+
+    <!-- Empty state (no AR dishes) -->
+    <div id="dynamic-empty">
+      <div class="empty-icon">🍽</div>
+      <p>No 3D dishes available yet.<br>Ask the restaurant to enable AR models.</p>
+    </div>
+
+    <!-- No model hint -->
+    <div id="dynamic-no-model">This dish doesn't have a 3D model</div>
+
+    <!-- Dish info card -->
+    <div id="dynamic-dish-info">
+      <div class="dynamic-dish-top">
+        <span id="dynamic-dish-emoji">🍽</span>
+        <div class="dynamic-dish-meta">
+          <div id="dynamic-dish-name">Loading…</div>
+          <div id="dynamic-dish-price">₹0</div>
+        </div>
+      </div>
+      <div id="dynamic-dish-desc"></div>
+      <div class="dynamic-dish-actions">
+        <button id="dynamic-view-ar-btn">🪄 View in Table</button>
+        <button id="dynamic-add-cart-btn">🛒 Add to Cart</button>
+      </div>
+    </div>
+
+    <!-- Dish navigation (prev / dots / next) -->
+    <div id="dynamic-nav">
+      <button class="dynamic-nav-btn" id="dynamic-prev-btn">‹</button>
+      <div id="dynamic-dots"></div>
+      <button class="dynamic-nav-btn" id="dynamic-next-btn">›</button>
+    </div>
+  </div>
+
+  <!-- Dynamic menu panel (bottom sheet, all dishes) -->
+  <div id="dynamic-menu-panel">
+    <div class="menu-handle-container">
+      <div class="menu-handle"></div>
+    </div>
+    <div class="dynamic-menu-card">
+      <div class="dynamic-menu-header">
+        <h3>Our Menu</h3>
+        <button id="dynamic-menu-close">Close</button>
+      </div>
+      <div class="categories" id="dynamic-categories">
+        <button class="cat-pill active" data-cat="all">All</button>
+      </div>
+      <div class="dish-grid" id="dynamic-dish-grid"></div>
+    </div>
+  </div>
+
+  <!-- ═══ CART UI ═══ -->
+
+  <!-- Floating cart button -->
+  <button id="cart-fab">
+    🛒
+    <span id="cart-badge"></span>
+  </button>
+
+  <!-- Added-to-cart toast -->
+  <div id="cart-toast"></div>
+
+  <!-- Cart panel -->
+  <div id="cart-panel">
+    <div class="cart-sheet">
+      <div class="cart-header">
+        <h3>Your Cart</h3>
+        <button id="cart-panel-close">Close</button>
+      </div>
+      <div id="cart-items-list"></div>
+      <div class="cart-footer">
+        <div class="cart-total-row">
+          <span class="cart-total-label">Total</span>
+          <span id="cart-total-amount">₹0</span>
+        </div>
+        <button id="cart-checkout-btn">Proceed to Checkout</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CHECKOUT PANEL ═══ -->
+  <div id="checkout-panel">
+    <div class="checkout-inner">
+      <button class="checkout-back" id="checkout-back-btn">← Back to Cart</button>
+      <div class="checkout-title">Your Details</div>
+      <div class="checkout-subtitle">We need a few details to process your order</div>
+
+      <form id="checkout-form" novalidate>
+        <div class="checkout-field">
+          <label>Full Name</label>
+          <input type="text" name="cust-name" placeholder="e.g. Arjun Sharma" autocomplete="name" />
+        </div>
+        <div class="checkout-field">
+          <label>Phone Number</label>
+          <input type="tel" name="cust-phone" placeholder="e.g. 9876543210" autocomplete="tel" />
+        </div>
+        <div class="checkout-field">
+          <label>Table / Address</label>
+          <input type="text" name="cust-address" placeholder="e.g. Table 4 or delivery address" />
+        </div>
+        <div class="checkout-field">
+          <label>Gender</label>
+          <select name="cust-gender">
+            <option value="">Select gender</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+            <option value="prefer_not">Prefer not to say</option>
+          </select>
+        </div>
+        <div class="checkout-field">
+          <label>Age</label>
+          <input type="number" name="cust-age" placeholder="e.g. 25" min="1" max="120" />
+        </div>
+
+        <div class="checkout-total-box">
+          <span class="checkout-total-label">Order Total</span>
+          <span id="checkout-total-display">₹0</span>
+        </div>
+
+        <div id="checkout-form-error"></div>
+        <button type="submit" id="checkout-submit-btn">Place Order</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══ ORDER SUCCESS ═══ -->
+  <div id="order-success-screen">
+    <div class="success-icon">✅</div>
+    <div class="success-title">Order Placed!</div>
+    <div class="success-subtitle">Your order has been received.<br>We'll have it ready for you shortly.</div>
+    <div id="order-success-num">#00000</div>
+    <button id="order-done-btn">Done</button>
+  </div>
+
+  <!-- ═══ ORDER ERROR ═══ -->
+  <div id="order-error-screen">
+    <div class="error-icon">❌</div>
+    <div class="error-title">Order Failed</div>
+    <div class="error-subtitle">Something went wrong while placing your order.<br>Please try again.</div>
+    <button id="order-retry-btn">Try Again</button>
+  </div>
+
   <script src="./config.js"></script>
   <script type="module">
-    import { ARSessionManager } from './js/ARSessionManager.js';
-    import { State, setState } from './js/StateManager.js';
+    import { ARSessionManager }   from './js/ARSessionManager.js';
+    import { DynamicUIManager }   from './js/DynamicUIManager.js';
+    import { CartManager }        from './js/CartManager.js';
+    import { State, setState }    from './js/StateManager.js';
 
     const DASHBOARD_API = window.__PALADEIUM_API__ || 'http://localhost:3000';
-    
+
+    // Default fallback menu (AR-capable item only)
     let MENU = [
       { id:'burger', name:'Wagyu Smash Burger', desc:'Double patty, aged cheddar, truffle aioli', price:'₹649', emoji:'🍔', cat:'mains', model:'models/the-grand-spice/burger.glb', hasAR:true },
-      { id:'pizza',  name:'Margherita Classico',  desc:'San Marzano tomato, buffalo mozzarella',  price:'₹549', emoji:'🍕', cat:'mains',    model:null,         hasAR:false },
-      { id:'pasta',  name:'Cacio e Pepe',         desc:'Tonnarelli, romano, tellicherry pepper',  price:'₹479', emoji:'🍝', cat:'mains',    model:null,         hasAR:false },
-      { id:'salad',  name:'Caesar Deluxe',        desc:'Romaine, house dressing, parmesan crisp', price:'₹329', emoji:'🥗', cat:'starters', model:null,         hasAR:false },
+      { id:'pizza',  name:'Margherita Classico', desc:'San Marzano tomato, buffalo mozzarella',   price:'₹549', emoji:'🍕', cat:'mains',    model:null, hasAR:false },
+      { id:'pasta',  name:'Cacio e Pepe',        desc:'Tonnarelli, romano, tellicherry pepper',   price:'₹479', emoji:'🍝', cat:'mains',    model:null, hasAR:false },
+      { id:'salad',  name:'Caesar Deluxe',       desc:'Romaine, house dressing, parmesan crisp',  price:'₹329', emoji:'🥗', cat:'starters', model:null, hasAR:false },
     ];
+    let CATEGORIES       = [];
+    let UI_TYPE          = 'ar';      // 'ar' | 'dynamic'
+    let PAYMENT_ENABLED  = false;
+    let cartManager      = null;
+
+    // ── Fetch menu data from API ──────────────────────────────
 
     async function fetchMenu() {
       const slug = new URLSearchParams(location.search).get('r');
       setState({ restaurantSlug: slug });
-      if (slug) {
-        try {
-          const res = await fetch(`${DASHBOARD_API}/api/restaurants/${slug}/menu`);
-          if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data.menu) && data.menu.length) {
-              MENU = data.menu.map(item => ({
-                id:    item.id,
-                name:  item.name,
-                desc:  item.description ?? item.desc ?? '',
-                price: typeof item.price === 'number' ? '₹' + item.price : (item.price ?? ''),
-                emoji: item.emoji ?? '',
-                cat:   (item.categoryId ?? item.cat ?? 'mains').toLowerCase(),
-                model: item.modelUrl ?? item.model ?? null,
-                modelScale: item.modelScale ?? 1.0,
-                hasAR: item.hasAr ?? item.hasAR ?? false,
-              }));
-            }
-            // Apply overlay visibility from restaurant settings (default: hidden)
-            window._arOverlayEnabled = data.restaurant?.arOverlayEnabled ?? false;
-          }
-        } catch {
-          console.warn('[Paladeium] API unavailable — using default menu');
-        }
+      if (!slug) {
+        _applyMenu();
+        return;
       }
-      // Filter out dishes without AR model for the AR viewer
-      const arMenu = MENU.filter(m => m.hasAR && m.model);
-      setState({ menuItems: arMenu });
+      try {
+        const res = await fetch(`${DASHBOARD_API}/api/restaurants/${slug}/menu`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.menu) && data.menu.length) {
+            MENU = data.menu.map(item => ({
+              id:         item.id,
+              name:       item.name,
+              desc:       item.description ?? item.desc ?? '',
+              price:      typeof item.price === 'number' ? '₹' + item.price : (item.price ?? ''),
+              emoji:      item.emoji ?? '',
+              cat:        (item.cat ?? 'other').toLowerCase(),
+              model:      item.model ?? null,
+              modelScale: item.modelScale ?? 1.0,
+              hasAR:      item.hasAR ?? false,
+            }));
+          }
+          CATEGORIES      = data.categories ?? [];
+          UI_TYPE         = data.restaurant?.uiType         ?? 'ar';
+          PAYMENT_ENABLED = data.restaurant?.paymentEnabled ?? false;
+          window._arOverlayEnabled        = data.restaurant?.arOverlayEnabled        ?? false;
+          window._markerDetectionEnabled  = data.restaurant?.markerDetectionEnabled  ?? true;
+        }
+      } catch {
+        console.warn('[Paladeium] API unavailable — using default menu');
+      }
+      _applyMenu();
     }
 
-    async function init() {
-      await fetchMenu();
+    function _applyMenu() {
+      // AR-enabled dishes only go into 3D viewer state
+      const arMenu = MENU.filter(m => m.hasAR && m.model);
+      setState({
+        menuItems:      arMenu,
+        uiType:         UI_TYPE,
+        paymentEnabled: PAYMENT_ENABLED,
+      });
+      // Make full menu available globally for DynamicUIManager
+      window._allMenuItems   = MENU;
+      window._menuCategories = CATEGORIES;
     }
+
+    // ── Launch AR mode ────────────────────────────────────────
 
     let arStarted = false;
-    document.getElementById('open-menu-btn').addEventListener('click', async () => {
+
+    async function launchAR(preSelectIndex) {
       if (arStarted) return;
       arStarted = true;
 
       const splash = document.getElementById('splash-screen');
       if (splash) splash.classList.add('hidden');
 
-      // Hide status bar and scanning hint unless restaurant opted in
       if (!window._arOverlayEnabled) {
         const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
         hide('status-bar');
         hide('surface-tap-hint');
+      }
+
+      // If a specific dish was requested (from "View in Table"), select it
+      if (typeof preSelectIndex === 'number' && preSelectIndex >= 0) {
+        setState({ currentDishIndex: preSelectIndex });
       }
 
       try {
@@ -676,7 +1380,71 @@
         console.error(e);
         alert('AR failed: ' + e.message);
       }
-    });
+    }
+
+    // ── Launch Dynamic mode ───────────────────────────────────
+
+    function launchDynamic() {
+      const splash = document.getElementById('splash-screen');
+      if (splash) splash.classList.add('hidden');
+
+      // Show Dynamic container and UI
+      const dynContainer = document.getElementById('dynamic-container');
+      const dynUI        = document.getElementById('dynamic-ui');
+      if (dynContainer) dynContainer.style.display = 'block';
+      if (dynUI)        dynUI.classList.add('active');
+
+      // Set up cart if payment is enabled
+      if (PAYMENT_ENABLED) {
+        cartManager = new CartManager({
+          apiBase:        DASHBOARD_API,
+          restaurantSlug: State.restaurantSlug,
+        });
+        const fab = document.getElementById('cart-fab');
+        if (fab) fab.classList.add('visible');
+      }
+
+      const dynManager = new DynamicUIManager({
+        paymentEnabled: PAYMENT_ENABLED,
+        onViewInTable: (dishIndex) => {
+          // User clicked "View in Table" — switch to AR with this dish
+          const dynContainer = document.getElementById('dynamic-container');
+          const dynUI        = document.getElementById('dynamic-ui');
+          const dynMenu      = document.getElementById('dynamic-menu-panel');
+          if (dynContainer) dynContainer.style.display = 'none';
+          if (dynUI)        dynUI.style.display        = 'none';
+          if (dynMenu)      dynMenu.classList.remove('visible');
+          launchAR(dishIndex);
+        },
+        onAddToCart: (item) => {
+          if (cartManager) cartManager.addItem(item);
+        },
+      });
+
+      window._dynManager = dynManager;
+      dynManager.start();
+    }
+
+    // ── Boot ──────────────────────────────────────────────────
+
+    async function init() {
+      await fetchMenu();
+
+      const openBtn = document.getElementById('open-menu-btn');
+
+      if (UI_TYPE === 'dynamic') {
+        // Update splash button label for dynamic mode
+        if (openBtn) openBtn.textContent = 'Explore Menu';
+
+        openBtn?.addEventListener('click', () => {
+          if (window._dynManager) return;
+          launchDynamic();
+        });
+      } else {
+        // AR mode — existing behaviour
+        openBtn?.addEventListener('click', () => launchAR());
+      }
+    }
 
     init();
   </script>

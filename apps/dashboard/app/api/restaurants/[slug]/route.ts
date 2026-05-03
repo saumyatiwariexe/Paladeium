@@ -11,6 +11,8 @@ const RestaurantUpdateSchema = z.object({
   targetsUrl:             z.string().url().nullable().optional(),
   markerDetectionEnabled: z.boolean().optional(),
   arOverlayEnabled:       z.boolean().optional(),
+  uiType:                 z.enum(['ar', 'dynamic']).optional(),
+  paymentEnabled:         z.boolean().optional(),
   deleteAt:               z.string().nullable().optional(),
 }).strict()
 

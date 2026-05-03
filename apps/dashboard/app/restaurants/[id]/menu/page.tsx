@@ -7,6 +7,8 @@ import DeleteItemButton from './DeleteItemButton'
 import ToggleAvailableButton from './ToggleAvailableButton'
 import ToggleMarkerDetectionButton from './ToggleMarkerDetectionButton'
 import ToggleAROverlayButton from './ToggleAROverlayButton'
+import ToggleUITypeButton from './ToggleUITypeButton'
+import TogglePaymentButton from './TogglePaymentButton'
 
 const LENS_URL = process.env.LENS_URL ?? 'http://localhost:3001'
 
@@ -63,6 +65,14 @@ export default async function MenuPage({ params }: { params: { id: string } }) {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <ToggleUITypeButton
+            restaurantSlug={restaurant.slug}
+            uiType={restaurant.uiType ?? 'ar'}
+          />
+          <TogglePaymentButton
+            restaurantSlug={restaurant.slug}
+            enabled={restaurant.paymentEnabled ?? false}
+          />
           <ToggleMarkerDetectionButton
             restaurantSlug={restaurant.slug}
             enabled={restaurant.markerDetectionEnabled ?? true}

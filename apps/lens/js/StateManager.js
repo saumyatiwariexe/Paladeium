@@ -3,10 +3,12 @@ export const State = {
   loadedDishes: new Map(),
   isMenuOpen: false,
   anchorPlaced: false,
-  menuItems: [],
+  menuItems: [],       // AR-enabled items only (for 3D viewer)
   activeDishId: null,
   showInfoCard: false,
   restaurantSlug: null,
+  uiType: 'ar',        // 'ar' | 'dynamic'
+  paymentEnabled: false,
 };
 
 const listeners = [];

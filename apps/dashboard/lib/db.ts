@@ -3,7 +3,7 @@ import path from 'path'
 import type { Database } from './types'
 
 const DB_PATH = path.join(process.cwd(), 'data', 'db.json')
-const EMPTY: Database = { restaurants: [], categories: [], items: [] }
+const EMPTY: Database = { restaurants: [], categories: [], items: [], orders: [] }
 
 // Upstash Redis is used in production when these env vars are set
 function hasRedis() {
