@@ -3,8 +3,17 @@ const nextConfig = {
   async headers() {
     return [
       {
-        // CORS: allow the AR Lens to call the public menu GET endpoint
+        // CORS for the JSON menu data
         source: '/api/restaurants/:slug/menu',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type' },
+        ],
+      },
+      {
+        // CORS for 3D model assets (.glb)
+        source: '/api/restaurants/:slug/models/:path*',
         headers: [
           { key: 'Access-Control-Allow-Origin', value: '*' },
           { key: 'Access-Control-Allow-Methods', value: 'GET, OPTIONS' },

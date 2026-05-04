@@ -121,15 +121,15 @@
     .nav-dot.active { background: var(--primary); width: 24px; border-radius: 12px; }
 
     /* ─── BOTTOM MENU ─── */
-    #dynamic-menu-panel { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; transform: translateY(100%); transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: auto; }
-    #dynamic-menu-panel.minimized { transform: translateY(calc(100% - 160px)); }
-    #dynamic-menu-panel.open { transform: translateY(0); }
+    #dynamic-menu-panel, #menu-panel { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; transform: translateY(100%); transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: auto; }
+    #dynamic-menu-panel.minimized, #menu-panel.minimized { transform: translateY(calc(100% - 140px)); }
+    #dynamic-menu-panel.open, #menu-panel.visible { transform: translateY(0); }
     .dynamic-menu-card { background: var(--card-bg); border-radius: 48px 48px 0 0; padding: 16px 32px 48px; box-shadow: 0 -10px 40px rgba(0,0,0,0.05); max-height: 85vh; display: flex; flex-direction: column; }
-    #dynamic-menu-handle-area { padding: 12px 0 32px; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+    #dynamic-menu-handle-area, #menu-handle-area { padding: 12px 0 32px; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
     .dynamic-handle-bar { width: 44px; height: 6px; border-radius: 10px; background: #F2F2F7; margin-bottom: 24px; }
     .dynamic-menu-header { width: 100%; display: flex; align-items: center; justify-content: space-between; }
     .dynamic-menu-header h3 { font-size: 26px; font-weight: 800; }
-    #dynamic-menu-close { background: #F2F2F7; border: none; border-radius: 50px; padding: 10px 24px; font-size: 14px; font-weight: 700; }
+    #dynamic-menu-close, #cart-panel-close, #checkout-back-btn { background: #F2F2F7; border: none; border-radius: 50px; padding: 10px 24px; font-size: 14px; font-weight: 700; cursor: pointer; }
 
     .dish-grid { display: flex; flex-direction: column; gap: 20px; overflow-y: auto; padding: 10px 0; scrollbar-width: none; }
     .dish-grid::-webkit-scrollbar { display: none; }
@@ -144,579 +144,33 @@
     .dish-ar-badge { background: #34C759; color: #FFF; font-size: 10px; font-weight: 900; padding: 3px 8px; border-radius: 8px; }
 
     /* ─── CART ─── */
-    #cart-fab { position: fixed; bottom: 48px; right: 32px; z-index: 100; width: 68px; height: 68px; background: var(--primary); border: none; border-radius: 22px; display: none; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 15px 30px rgba(255, 75, 58, 0.35); }
+    #cart-fab { position: fixed; bottom: 48px; right: 32px; z-index: 100; width: 68px; height: 68px; background: var(--primary); border: none; border-radius: 22px; display: none; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 15px 30px rgba(255, 75, 58, 0.35); pointer-events: auto; cursor: pointer; }
     #cart-fab.visible { display: flex; }
     #cart-badge { position: absolute; top: -10px; right: -10px; background: var(--text); color: #FFF; min-width: 26px; height: 26px; border-radius: 13px; font-size: 13px; font-weight: 800; display: none; align-items: center; justify-content: center; }
 
     /* ─── LOADING & UTILS ─── */
-    #model-loading, #dynamic-model-loading { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%); z-index: 60; opacity: 0; pointer-events: none; }
-    #model-loading.visible, #dynamic-model-loading.visible { opacity: 1; }
+    #model-loading { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%); z-index: 60; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+    #model-loading.visible { opacity: 1; }
     .skeleton-card { background: var(--card-bg); border-radius: var(--radius-lg); padding: 32px; width: 300px; box-shadow: var(--shadow); }
     .skeleton-image { height: 180px; background: #F2F2F7; border-radius: 24px; margin-bottom: 24px; animation: pulse 1.5s infinite; }
+    .skeleton-line { height: 12px; background: #F2F2F7; border-radius: 6px; margin-bottom: 12px; }
     @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
 
-    #no-anchor-msg, #ar-hint { position: fixed; z-index: 45; background: rgba(0,0,0,0.8); color: #FFF; border-radius: 20px; padding: 16px 24px; font-size: 14px; backdrop-filter: blur(10px); }
-    #no-anchor-msg { top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; opacity: 0; pointer-events: none; }
-    #no-anchor-msg.visible { opacity: 1; }
-    #ar-hint { bottom: 120px; left: 50%; transform: translateX(-50%); opacity: 0; pointer-events: none; }
-    #ar-hint.visible { opacity: 1; }
-  </style>
+    #no-anchor-msg, #ar-hint { position: fixed; z-index: 45; background: rgba(0,0,0,0.8); color: #FFF; border-radius: 20px; padding: 16px 24px; font-size: 14px; backdrop-filter: blur(10px); text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+    #no-anchor-msg.visible { opacity: 1; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+    #ar-hint.visible { opacity: 1; bottom: 120px; left: 50%; transform: translateX(-50%); }
 
-    /* ═══════════════════════════════════════
-       AR UI — INFO CARD
-    ═══════════════════════════════════════ */
-    #info-card {
-      position:fixed; bottom:130px; left:50%;
-      transform:translateX(-50%) translateY(18px);
-      z-index:35; width:90%; max-width:350px;
-      background:rgba(10,10,15,0.92); backdrop-filter:blur(22px);
-      border:1px solid var(--border); border-radius:22px; padding:18px 20px;
-      opacity:0; pointer-events:none;
-      transition:all 0.4s cubic-bezier(0.22,1,0.36,1);
-    }
-    #info-card.visible { opacity:1; pointer-events:auto; transform:translateX(-50%) translateY(0); }
-    .info-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
-    .info-name { font-size:16px; font-weight:700; }
-    .info-price { font-size:16px; font-weight:700; color:var(--accent); }
-    .info-desc { font-size:12px; color:var(--t2); line-height:1.5; }
+    /* Panels */
+    #cart-panel, #checkout-panel { position: fixed; inset: 0; z-index: 150; background: rgba(0,0,0,0.4); backdrop-filter: blur(10px); display: none; align-items: flex-end; }
+    #cart-panel.visible, #checkout-panel.visible { display: flex; }
+    .cart-sheet, .checkout-inner { width: 100%; background: var(--bg); border-radius: 48px 48px 0 0; padding: 32px 24px 48px; max-height: 90vh; overflow-y: auto; }
+    .checkout-inner { background: var(--bg); transform: translateY(0); }
+    
+    .checkout-field { margin-bottom: 24px; }
+    .checkout-field label { display: block; font-size: 12px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+    .checkout-field input, .checkout-field select { width: 100%; padding: 16px 20px; border-radius: 16px; border: 1px solid #E5E5EA; background: #FFF; font-family: inherit; font-size: 16px; }
 
-    /* ═══════════════════════════════════════
-       AR UI — MISC ELEMENTS
-    ═══════════════════════════════════════ */
-    #no-anchor-msg {
-      position:fixed; top:50%; left:50%;
-      transform:translate(-50%,-50%) scale(0.9);
-      z-index:45; text-align:center;
-      background:rgba(10,10,15,0.92); backdrop-filter:blur(22px);
-      border:1px solid var(--border); border-radius:22px; padding:24px 28px;
-      font-size:13px; color:var(--t2);
-      opacity:0; pointer-events:none; transition:all 0.4s ease;
-    }
-    #no-anchor-msg.visible { opacity:1; transform:translate(-50%,-50%) scale(1); }
-    #no-anchor-msg .icon { font-size:36px; margin-bottom:12px; }
-    #no-anchor-msg strong { color:var(--accent); }
-
-    #scan-ring {
-      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-      z-index:45; width:110px; height:110px; border-radius:50%;
-      pointer-events:none; opacity:0; transition:opacity 0.4s ease;
-    }
-    #scan-ring.visible { opacity:1; }
-    .scan-ring-track { position:absolute; inset:0; border-radius:50%; border:2px solid rgba(255,102,54,0.15); }
-    .scan-ring-fill { position:absolute; inset:0; border-radius:50%; border:2.5px solid transparent; border-top-color:var(--accent); border-right-color:var(--accent); }
-    #scan-ring.ready .scan-ring-fill { border-color:var(--accent); animation:spin-complete 0.4s ease forwards; }
-    @keyframes spin-complete { to { transform:rotate(360deg); opacity:0.6; } }
-    .scan-ring-icon { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:24px; }
-
-    #surface-tap-hint {
-      position:fixed; bottom:220px; left:50%; transform:translateX(-50%);
-      z-index:45; background:rgba(10,10,15,0.88); backdrop-filter:blur(12px);
-      border:1px solid var(--border); border-radius:50px; padding:10px 24px;
-      font-size:13px; font-weight:500; color:var(--text);
-      display:none; align-items:center; gap:8px; white-space:nowrap; pointer-events:none;
-    }
-    #surface-tap-hint.visible { display:flex; }
-    .tap-pulse { width:8px; height:8px; border-radius:50%; background:var(--accent); animation:pulse 1.5s ease-in-out infinite; }
-
-    #surface-controls { position:fixed; bottom:380px; left:50%; transform:translateX(-50%); z-index:45; display:none; gap:10px; align-items:center; }
-    #surface-reposition-btn {
-      background:rgba(10,10,15,0.88); backdrop-filter:blur(12px);
-      border:1px solid var(--border); border-radius:50px;
-      padding:10px 22px; font-size:13px; font-weight:600;
-      color:var(--t2); cursor:pointer; font-family:'Inter',sans-serif;
-    }
-
-    #model-loading { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:60; opacity:0; pointer-events:none; transition:opacity 0.3s ease; }
-    #model-loading.visible { opacity:1; }
-    .skeleton-card { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:22px; width:220px; display:flex; flex-direction:column; gap:14px; }
-    .skeleton-image { width:100%; height:120px; border-radius:12px; background:linear-gradient(90deg,rgba(255,102,54,0.04) 25%,rgba(255,102,54,0.1) 50%,rgba(255,102,54,0.04) 75%); background-size:200% 100%; animation:shimmer 1.6s infinite; }
-    .skeleton-line { height:11px; border-radius:6px; background:linear-gradient(90deg,rgba(255,255,255,0.03) 25%,rgba(255,255,255,0.07) 50%,rgba(255,255,255,0.03) 75%); background-size:200% 100%; animation:shimmer 1.6s infinite; }
-    .skeleton-line.short { width:55%; }
-    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-
-    #tutorial-overlay { position:fixed; inset:0; z-index:55; display:flex; flex-direction:column; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.4s ease; }
-    #tutorial-overlay.visible { opacity:1; pointer-events:auto; }
-    .tutorial-hand { font-size:54px; animation:swipe-hand 2s ease-in-out infinite; margin-bottom:20px; }
-    .tutorial-text { font-size:16px; font-weight:600; color:#fff; text-shadow:0 2px 12px rgba(0,0,0,0.8); }
-    @keyframes swipe-hand { 0%{transform:translateX(50px) rotate(10deg);opacity:0} 20%{transform:translateX(50px) rotate(10deg);opacity:1} 80%{transform:translateX(-50px) rotate(-10deg);opacity:1} 100%{transform:translateX(-50px) rotate(-10deg);opacity:0} }
-
-    #ar-hint { position:fixed; bottom:390px; left:50%; transform:translateX(-50%) translateY(18px); z-index:45; background:rgba(10,10,15,0.88); backdrop-filter:blur(12px); border:1px solid var(--border); border-radius:24px; padding:8px 18px; font-size:12px; color:var(--t2); display:flex; align-items:center; gap:8px; opacity:0; transition:all 0.5s ease; pointer-events:none; white-space:nowrap; }
-    #ar-hint.visible { opacity:1; transform:translateX(-50%) translateY(0); }
-
-    /* ═══════════════════════════════════════
-       AR UI — MENU PANEL
-    ═══════════════════════════════════════ */
-    #menu-panel {
-      position:fixed; bottom:0; left:0; right:0; z-index:40;
-      transform:translateY(100%); transition:transform 0.5s cubic-bezier(0.22,1,0.36,1);
-      padding:0 12px 24px;
-    }
-    #menu-panel.visible  { transform:translateY(0); }
-    #menu-panel.minimized { transform:translateY(calc(100% - 72px)); }
-    .menu-handle-container { width:100%; cursor:pointer; padding-top:8px; display:flex; flex-direction:column; align-items:center; }
-    .menu-handle { width:36px; height:4px; border-radius:2px; background:rgba(255,255,255,0.2); margin:0 auto 14px; }
-    .menu-card { background:rgba(10,10,15,0.96); backdrop-filter:blur(28px); border:1px solid var(--border); border-radius:22px; padding:20px 18px 16px; }
-    .menu-header { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:16px; }
-    .menu-header h3 { font-size:20px; font-weight:800; color:var(--text); }
-    .menu-header .subtitle { font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:var(--accent); font-weight:600; }
-
-    /* ═══════════════════════════════════════
-       SHARED — PILLS + GRID CARDS
-    ═══════════════════════════════════════ */
-    .categories {
-      display:flex; gap:8px; overflow-x:auto;
-      margin-bottom:14px; padding-bottom:2px; scrollbar-width:none;
-    }
-    .categories::-webkit-scrollbar { display:none; }
-
-    .cat-pill {
-      flex-shrink:0; padding:7px 18px; border-radius:100px;
-      font-size:12px; font-weight:500;
-      border:1px solid var(--border); background:transparent;
-      color:var(--t2); cursor:pointer; transition:all 0.2s ease; white-space:nowrap;
-    }
-    .cat-pill.active {
-      background:var(--accent); border-color:var(--accent);
-      color:#fff; font-weight:700;
-    }
-
-    .dish-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
-
-    .dish-card {
-      background:var(--surface); border:1px solid var(--border);
-      border-radius:18px; padding:14px 12px;
-      cursor:pointer; transition:all 0.18s ease;
-      position:relative; overflow:hidden;
-    }
-    .dish-card:active { transform:scale(0.97); }
-    .dish-card.active { border-color:var(--accent); background:rgba(255,102,54,0.08); }
-    .dish-emoji { font-size:30px; margin-bottom:10px; display:block; }
-    .dish-name { font-size:13px; font-weight:700; color:var(--text); margin-bottom:3px; line-height:1.3; }
-    .dish-desc { font-size:10px; color:var(--t2); margin-bottom:8px; line-height:1.4; }
-    .dish-price { font-size:14px; font-weight:800; color:var(--accent); }
-    .dish-ar-badge {
-      position:absolute; top:8px; right:8px;
-      font-size:8px; font-weight:700; letter-spacing:0.5px;
-      background:var(--accent-dim); color:var(--accent);
-      border:1px solid rgba(255,102,54,0.3); border-radius:5px; padding:2px 6px;
-    }
-
-    /* ═══════════════════════════════════════
-       DYNAMIC — 3D CANVAS
-    ═══════════════════════════════════════ */
-    #dynamic-container {
-      position:fixed; inset:0; z-index:0; display:none;
-      background:
-        radial-gradient(circle at 50% 32%, rgba(255,102,54,0.22) 0%, rgba(255,102,54,0.04) 40%, transparent 62%),
-        linear-gradient(180deg, #0F0806 0%, #0A0A0F 55%, #0A0A0F 100%);
-    }
-    #dynamic-container canvas {
-      position:absolute; inset:0;
-      width:100% !important; height:100% !important;
-    }
-
-    /* ═══════════════════════════════════════
-       DYNAMIC — APP SHELL
-    ═══════════════════════════════════════ */
-    #dynamic-ui {
-      display:none; position:fixed; inset:0; z-index:10; pointer-events:none;
-    }
-    #dynamic-ui.active { display:block; }
-
-    /* Header */
-    #dynamic-header {
-      position:absolute; top:0; left:0; right:0;
-      display:flex; align-items:center; justify-content:space-between;
-      padding:20px 22px 18px;
-      background:linear-gradient(180deg, rgba(10,10,15,0.80) 0%, transparent 100%);
-      pointer-events:auto;
-    }
-    #dynamic-menu-btn {
-      width:42px; height:42px; border-radius:14px;
-      border:1px solid var(--border);
-      background:rgba(255,255,255,0.07); backdrop-filter:blur(12px);
-      display:flex; align-items:center; justify-content:center;
-      font-size:19px; color:var(--text); cursor:pointer;
-      transition:background 0.18s ease;
-    }
-    #dynamic-menu-btn:active { background:rgba(255,255,255,0.14); }
-
-    .dynamic-brand {
-      font-family:'Playfair Display',serif;
-      font-size:18px; font-weight:700; color:var(--text); letter-spacing:0.2px;
-    }
-    .dynamic-brand span { color:var(--accent); }
-
-    /* Cart fab — lives in the header */
-    #cart-fab {
-      width:42px; height:42px; border-radius:14px;
-      border:1px solid var(--border);
-      background:rgba(255,255,255,0.07); backdrop-filter:blur(12px);
-      display:none; align-items:center; justify-content:center;
-      font-size:19px; cursor:pointer; position:relative;
-      transition:background 0.18s ease; pointer-events:auto;
-    }
-    #cart-fab.visible { display:flex; }
-    #cart-fab:active { background:rgba(255,255,255,0.14); }
-    #cart-badge {
-      position:absolute; top:-6px; right:-6px;
-      min-width:18px; height:18px; border-radius:9px;
-      background:var(--accent); color:#fff;
-      font-size:10px; font-weight:800;
-      display:none; align-items:center; justify-content:center; padding:0 4px;
-      font-family:'Inter',sans-serif;
-    }
-
-    /* Loading indicator */
-    #dynamic-model-loading {
-      position:absolute; top:50%; left:50%;
-      transform:translate(-50%,-62%);
-      z-index:20; opacity:0; pointer-events:none; transition:opacity 0.3s ease;
-    }
-    #dynamic-model-loading.visible { opacity:1; }
-
-    /* Empty state */
-    #dynamic-empty {
-      position:absolute; top:36%; left:50%;
-      transform:translate(-50%,-50%);
-      text-align:center; color:var(--t2); font-size:14px;
-      opacity:0; pointer-events:none; transition:opacity 0.4s ease;
-    }
-    #dynamic-empty.visible { opacity:1; }
-    #dynamic-empty .empty-icon { font-size:56px; margin-bottom:18px; }
-
-    /* ── Nav arrows ── */
-    #dynamic-prev-btn, #dynamic-next-btn {
-      position:absolute; top:40%; transform:translateY(-50%);
-      width:44px; height:44px; border-radius:50%;
-      border:1px solid rgba(255,255,255,0.12);
-      background:rgba(10,10,15,0.55); backdrop-filter:blur(14px);
-      display:flex; align-items:center; justify-content:center;
-      font-size:24px; color:rgba(255,255,255,0.75);
-      cursor:pointer; pointer-events:auto;
-      transition:all 0.18s ease;
-    }
-    #dynamic-prev-btn { left:16px; }
-    #dynamic-next-btn { right:16px; }
-    #dynamic-prev-btn:active,
-    #dynamic-next-btn:active {
-      background:rgba(255,102,54,0.25);
-      border-color:var(--accent); color:var(--accent);
-      transform:translateY(-50%) scale(0.92);
-    }
-
-    /* ── Position dots ── */
-    #dynamic-dots {
-      position:absolute; left:50%; transform:translateX(-50%);
-      bottom:228px;
-      display:flex; gap:6px; align-items:center; pointer-events:auto;
-    }
-    .nav-dot {
-      width:6px; height:6px; border-radius:3px;
-      background:rgba(255,255,255,0.22); cursor:pointer;
-      transition:all 0.25s ease;
-    }
-    .nav-dot.active {
-      background:var(--accent); width:22px; border-radius:3px;
-    }
-
-    /* ═══════════════════════════════════════
-       DYNAMIC — DISH INFO PANEL
-    ═══════════════════════════════════════ */
-    #dynamic-dish-info {
-      position:absolute; bottom:0; left:0; right:0;
-      background:rgba(9,9,14,0.95);
-      backdrop-filter:blur(32px);
-      -webkit-backdrop-filter:blur(32px);
-      border-top:1px solid rgba(255,255,255,0.07);
-      border-radius:30px 30px 0 0;
-      padding:24px 22px 42px;
-      pointer-events:auto;
-    }
-
-    /* Top row: emoji box + rating */
-    .dyn-top-row {
-      display:flex; align-items:center; justify-content:space-between;
-      margin-bottom:14px;
-    }
-    .dyn-emoji-box {
-      width:48px; height:48px; border-radius:14px;
-      background:var(--surface-2); border:1px solid var(--border);
-      display:flex; align-items:center; justify-content:center;
-      font-size:26px; flex-shrink:0;
-    }
-    #dynamic-dish-emoji { font-size:26px; }
-    .dyn-rating-pill {
-      display:flex; align-items:center; gap:5px;
-      background:rgba(255,184,0,0.12); border:1px solid rgba(255,184,0,0.22);
-      border-radius:50px; padding:5px 12px;
-      font-size:12px; font-weight:700; color:var(--star);
-    }
-
-    /* Name + price row */
-    .dyn-name-row {
-      display:flex; align-items:flex-start; justify-content:space-between;
-      gap:12px; margin-bottom:8px;
-    }
-    #dynamic-dish-name {
-      font-size:22px; font-weight:900; color:var(--text);
-      line-height:1.15; flex:1;
-      letter-spacing:-0.3px;
-    }
-    #dynamic-dish-price {
-      font-size:22px; font-weight:900; color:var(--accent);
-      flex-shrink:0; padding-top:2px;
-    }
-
-    /* Description */
-    #dynamic-dish-desc {
-      font-size:13px; color:var(--t2); line-height:1.55;
-      margin-bottom:22px;
-    }
-
-    /* Action buttons */
-    .dyn-actions { display:flex; gap:10px; align-items:stretch; }
-
-    #dynamic-view-ar-btn {
-      flex-shrink:0; height:54px; padding:0 20px;
-      border:1px solid var(--border);
-      background:rgba(255,255,255,0.06);
-      border-radius:18px;
-      font-size:13px; font-weight:600; color:var(--t2);
-      cursor:pointer; display:flex; align-items:center; gap:7px;
-      font-family:'Inter',sans-serif; transition:all 0.18s ease;
-      white-space:nowrap;
-    }
-    #dynamic-view-ar-btn:active { background:rgba(255,255,255,0.11); }
-
-    #dynamic-add-cart-btn {
-      flex:1; height:54px; border:none; border-radius:18px; cursor:pointer;
-      background:linear-gradient(135deg, var(--accent) 0%, var(--accent-lt) 100%);
-      box-shadow:0 8px 28px rgba(255,102,54,0.38);
-      font-size:15px; font-weight:800; color:#fff;
-      font-family:'Inter',sans-serif;
-      display:none; align-items:center; justify-content:center; gap:8px;
-      transition:all 0.18s ease;
-    }
-    #dynamic-add-cart-btn:active { transform:scale(0.97); box-shadow:0 4px 14px rgba(255,102,54,0.25); }
-
-    /* ═══════════════════════════════════════
-       DYNAMIC — FULL MENU SHEET
-    ═══════════════════════════════════════ */
-    #dynamic-menu-panel {
-      position:fixed; bottom:0; left:0; right:0; z-index:50;
-      transform:translateY(100%);
-      transition:transform 0.46s cubic-bezier(0.22,1,0.36,1);
-    }
-    #dynamic-menu-panel.minimized { transform:translateY(calc(100% - 78px)); }
-    #dynamic-menu-panel.open      { transform:translateY(0); }
-
-    .dynamic-menu-card {
-      background:rgba(9,9,14,0.97);
-      backdrop-filter:blur(36px);
-      -webkit-backdrop-filter:blur(36px);
-      border-top:1px solid rgba(255,255,255,0.07);
-      border-radius:28px 28px 0 0;
-      padding:0 18px 28px;
-      max-height:78vh; overflow:hidden;
-    }
-
-    #dynamic-menu-handle-area {
-      width:100%; padding:14px 0 10px;
-      display:flex; flex-direction:column; align-items:center; gap:12px;
-      cursor:pointer;
-    }
-    .dynamic-handle-bar {
-      width:38px; height:4px; border-radius:2px;
-      background:rgba(255,255,255,0.16);
-    }
-    .dynamic-menu-header {
-      display:flex; align-items:center; justify-content:space-between; width:100%;
-    }
-    .dynamic-menu-header h3 { font-size:18px; font-weight:800; color:var(--text); }
-    #dynamic-menu-close {
-      background:var(--surface-2); border:1px solid var(--border);
-      border-radius:50px; padding:6px 18px;
-      font-size:12px; font-weight:600; color:var(--t2); cursor:pointer;
-    }
-    #dynamic-menu-btn { /* re-shown as header hamburger, keep visible */ }
-
-    #dynamic-dish-grid { overflow-y:auto; max-height:52vh; margin-top:4px; }
-    #dynamic-dish-grid::-webkit-scrollbar { display:none; }
-
-    /* ═══════════════════════════════════════
-       CART TOAST
-    ═══════════════════════════════════════ */
-    #cart-toast {
-      position:fixed; bottom:80px; left:50%;
-      transform:translateX(-50%) translateY(12px);
-      z-index:90; pointer-events:none;
-      background:var(--surface); border:1px solid var(--border);
-      backdrop-filter:blur(16px); border-radius:50px;
-      padding:11px 26px; font-size:13px; font-weight:600; color:var(--text);
-      opacity:0; transition:all 0.3s ease; white-space:nowrap;
-    }
-    #cart-toast.visible { opacity:1; transform:translateX(-50%) translateY(0); }
-
-    /* ═══════════════════════════════════════
-       CART PANEL
-    ═══════════════════════════════════════ */
-    #cart-panel {
-      position:fixed; inset:0; z-index:100;
-      background:rgba(0,0,0,0.65); backdrop-filter:blur(6px);
-      display:flex; align-items:flex-end;
-      opacity:0; pointer-events:none; transition:opacity 0.3s ease;
-    }
-    #cart-panel.visible { opacity:1; pointer-events:auto; }
-    .cart-sheet {
-      width:100%; background:var(--surface);
-      border-radius:28px 28px 0 0; border-top:1px solid var(--border);
-      padding:28px 22px 48px; max-height:84vh; overflow-y:auto;
-      transform:translateY(100%);
-      transition:transform 0.42s cubic-bezier(0.22,1,0.36,1);
-    }
-    #cart-panel.visible .cart-sheet { transform:translateY(0); }
-    .cart-sheet::-webkit-scrollbar { display:none; }
-
-    .cart-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
-    .cart-header h3 { font-size:24px; font-weight:900; color:var(--text); }
-    #cart-panel-close {
-      background:var(--surface-2); border:1px solid var(--border);
-      border-radius:50px; padding:7px 18px;
-      font-size:12px; font-weight:600; color:var(--t2); cursor:pointer;
-    }
-    .cart-empty { text-align:center; color:var(--t2); font-size:14px; padding:44px 0; }
-    .cart-item-row {
-      display:flex; align-items:center; gap:14px;
-      padding:16px 0; border-bottom:1px solid var(--border-2);
-    }
-    .cart-item-emoji { font-size:34px; flex-shrink:0; }
-    .cart-item-info { flex:1; min-width:0; }
-    .cart-item-name { font-size:14px; font-weight:700; color:var(--text); }
-    .cart-item-price { font-size:13px; color:var(--accent); font-weight:600; margin-top:3px; }
-    .cart-qty-control {
-      display:flex; align-items:center; gap:12px;
-      background:var(--surface-2); border:1px solid var(--border);
-      border-radius:50px; padding:6px 14px;
-    }
-    .qty-btn { background:none; border:none; font-size:20px; color:var(--accent); cursor:pointer; line-height:1; }
-    .qty-val { font-size:14px; font-weight:800; color:var(--text); min-width:20px; text-align:center; }
-    .cart-footer { margin-top:24px; }
-    .cart-total-row {
-      display:flex; justify-content:space-between; align-items:center;
-      background:var(--surface-2); border:1px solid var(--border);
-      border-radius:18px; padding:16px 20px; margin-bottom:18px;
-    }
-    .cart-total-label { font-size:14px; color:var(--t2); }
-    #cart-total-amount { font-size:24px; font-weight:900; color:var(--text); }
-    #cart-checkout-btn {
-      width:100%; border:none; border-radius:18px; padding:18px;
-      background:linear-gradient(135deg, var(--accent), var(--accent-lt));
-      box-shadow:0 8px 28px rgba(255,102,54,0.38);
-      font-size:15px; font-weight:800; color:#fff;
-      font-family:'Inter',sans-serif; cursor:pointer;
-      transition:transform 0.15s ease;
-    }
-    #cart-checkout-btn:active { transform:scale(0.98); }
-
-    /* ═══════════════════════════════════════
-       CHECKOUT PANEL
-    ═══════════════════════════════════════ */
-    #checkout-panel {
-      position:fixed; inset:0; z-index:110;
-      background:var(--bg); overflow-y:auto;
-      transform:translateX(100%);
-      transition:transform 0.42s cubic-bezier(0.22,1,0.36,1);
-    }
-    #checkout-panel.visible { transform:translateX(0); }
-    .checkout-inner { padding:36px 22px 64px; min-height:100%; }
-
-    .checkout-back {
-      display:flex; align-items:center; gap:8px;
-      background:none; border:none; color:var(--t2);
-      font-size:14px; font-weight:500; cursor:pointer;
-      margin-bottom:30px; padding:0; font-family:'Inter',sans-serif;
-    }
-    .checkout-title { font-size:30px; font-weight:900; color:var(--text); margin-bottom:6px; letter-spacing:-0.5px; }
-    .checkout-subtitle { font-size:13px; color:var(--t2); margin-bottom:32px; }
-
-    .checkout-field { margin-bottom:20px; }
-    .checkout-field label {
-      display:block; font-size:11px; font-weight:700;
-      letter-spacing:1px; text-transform:uppercase;
-      color:var(--t3); margin-bottom:9px;
-    }
-    .checkout-field input,
-    .checkout-field select {
-      width:100%; background:var(--surface);
-      border:1px solid var(--border); border-radius:16px;
-      padding:16px 18px; font-size:14px; font-weight:500;
-      color:var(--text); font-family:'Inter',sans-serif;
-      outline:none; transition:border-color 0.2s ease;
-      -webkit-appearance:none; appearance:none;
-    }
-    .checkout-field input:focus,
-    .checkout-field select:focus { border-color:var(--accent); }
-    .checkout-field select option { background:var(--surface); color:var(--text); }
-
-    .checkout-total-box {
-      background:var(--surface); border:1px solid var(--border);
-      border-radius:18px; padding:18px 22px;
-      display:flex; justify-content:space-between; align-items:center; margin:28px 0;
-    }
-    .checkout-total-label { font-size:13px; color:var(--t2); }
-    #checkout-total-display { font-size:26px; font-weight:900; color:var(--accent); }
-    #checkout-form-error { display:none; color:#FF5252; font-size:13px; margin-bottom:12px; font-weight:600; }
-
-    #checkout-submit-btn {
-      width:100%; border:none; border-radius:18px; padding:19px;
-      background:linear-gradient(135deg, var(--accent), var(--accent-lt));
-      box-shadow:0 8px 28px rgba(255,102,54,0.38);
-      font-size:16px; font-weight:800; color:#fff;
-      font-family:'Inter',sans-serif; cursor:pointer;
-      transition:transform 0.15s ease;
-    }
-    #checkout-submit-btn:disabled { opacity:0.4; cursor:not-allowed; }
-    #checkout-submit-btn:active:not(:disabled) { transform:scale(0.98); }
-
-    /* ═══════════════════════════════════════
-       ORDER SUCCESS / ERROR
-    ═══════════════════════════════════════ */
-    #order-success-screen,
-    #order-error-screen {
-      position:fixed; inset:0; z-index:120;
-      background:radial-gradient(ellipse 150% 90% at 50% -10%, #1E0800 0%, #0A0A0F 55%);
-      display:flex; align-items:center; justify-content:center;
-      flex-direction:column; text-align:center; padding:48px 36px;
-      opacity:0; pointer-events:none; transition:opacity 0.4s ease;
-    }
-    #order-success-screen.visible,
-    #order-error-screen.visible { opacity:1; pointer-events:auto; }
-
-    .result-icon-wrap {
-      width:100px; height:100px; border-radius:28px; margin-bottom:30px;
-      background:var(--surface); border:1px solid var(--border);
-      display:flex; align-items:center; justify-content:center; font-size:52px;
-      box-shadow:0 24px 64px rgba(0,0,0,0.45);
-    }
-    .result-title { font-size:32px; font-weight:900; color:var(--text); margin-bottom:10px; letter-spacing:-0.5px; }
-    .result-sub { font-size:14px; color:var(--t2); line-height:1.65; }
-    #order-success-num {
-      font-size:13px; font-weight:700; color:var(--accent);
-      background:var(--accent-dim); border:1px solid rgba(255,102,54,0.3);
-      border-radius:50px; padding:9px 28px; margin:18px 0 40px; display:inline-block;
-    }
-    #order-done-btn, #order-retry-btn {
-      border:none; border-radius:18px; padding:17px 60px;
-      font-size:16px; font-weight:800; font-family:'Inter',sans-serif; cursor:pointer;
-    }
-    #order-done-btn {
-      background:linear-gradient(135deg, var(--accent), var(--accent-lt));
-      box-shadow:0 8px 28px rgba(255,102,54,0.38); color:#fff;
-    }
-    #order-retry-btn {
-      background:var(--surface); border:1px solid var(--border); color:var(--accent);
-    }
+    #checkout-submit-btn, #cart-checkout-btn { width: 100%; background: var(--primary); color: #FFF; border: none; border-radius: 20px; padding: 20px; font-size: 17px; font-weight: 700; cursor: pointer; box-shadow: 0 10px 20px rgba(255, 75, 58, 0.2); }
   </style>
 </head>
 <body>
@@ -743,70 +197,44 @@
   </div>
 
   <!-- ─── AR — MENU PANEL ─── -->
-  <div id="menu-panel">
+  <div id="menu-panel" class="minimized">
     <div class="dynamic-menu-card">
-      <div id="menu-handle-area" style="padding: 12px 0 24px; display: flex; flex-direction: column; align-items: center; cursor: pointer;">
+      <div id="menu-handle-area">
         <div class="dynamic-handle-bar"></div>
         <div class="dynamic-menu-header">
           <h3>AR Menu</h3>
-          <span style="font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase;">Tap to view in 3D</span>
+          <span style="font-size: 12px; color: var(--primary); font-weight: 700;">3D DISHES</span>
         </div>
       </div>
-      <div class="categories" id="ar-categories">
-        <!-- Pills generated via JS -->
-      </div>
-      <div class="dish-grid" id="ar-dish-grid">
-        <!-- Grid items generated via JS -->
-      </div>
+      <div class="categories" id="ar-categories"></div>
+      <div class="dish-grid" id="ar-dish-grid"></div>
     </div>
   </div>
 
-  <div id="tutorial-overlay">
-    <div class="tutorial-hand">👆</div>
-    <div class="tutorial-text">Swipe to explore</div>
-  </div>
-
-  <div id="scan-ring">
-    <div class="scan-ring-track"></div>
-    <div class="scan-ring-fill"></div>
-    <div class="scan-ring-icon">🎯</div>
-  </div>
-
-  <!-- ─── DYNAMIC CONTAINER ─── -->
-  <div id="dynamic-container"></div>
-
   <!-- ─── DYNAMIC UI ─── -->
+  <div id="dynamic-container"></div>
   <div id="dynamic-ui">
     <div id="dynamic-header">
       <div class="dynamic-brand">Paladeium<span> Lens</span></div>
     </div>
-
-    <!-- Categories -->
     <div class="categories-section">
-      <div class="categories" id="dynamic-categories">
-        <!-- Pills generated via JS -->
-      </div>
+      <div class="categories" id="dynamic-categories"></div>
     </div>
-
-    <!-- Dish Info Card -->
     <div id="dynamic-dish-info">
       <div id="dynamic-dish-emoji">🍔</div>
       <h2 id="dynamic-dish-name">Loading Dish…</h2>
-      <div id="dynamic-dish-price">$0.00</div>
-      <p id="dynamic-dish-desc">Fetching details from the kitchen…</p>
+      <div id="dynamic-dish-price">₹0</div>
+      <p id="dynamic-dish-desc">Fetching details…</p>
       <div class="dynamic-dish-actions">
-        <button id="dynamic-view-ar-btn">View in 3D AR</button>
+        <button id="dynamic-view-ar-btn">View in AR</button>
+        <button id="dynamic-add-cart-btn" style="background: var(--text); flex: 1; border-radius: 20px; color: #FFF; border: none; font-weight: 700;">Add to Cart</button>
       </div>
     </div>
-
-    <!-- Navigation -->
     <div id="dynamic-nav">
       <button class="dynamic-nav-btn" id="dynamic-prev">←</button>
       <div id="dynamic-dots"></div>
       <button class="dynamic-nav-btn" id="dynamic-next">→</button>
     </div>
-
-    <!-- Bottom Menu Panel -->
     <div id="dynamic-menu-panel" class="minimized">
       <div class="dynamic-menu-card">
         <div id="dynamic-menu-handle-area">
@@ -816,138 +244,90 @@
             <button id="dynamic-menu-close">Close</button>
           </div>
         </div>
-        <div class="dish-grid" id="dynamic-dish-grid">
-          <!-- Grid items generated via JS -->
-        </div>
+        <div class="dish-grid" id="dynamic-dish-grid"></div>
       </div>
     </div>
   </div>
 
-  <!-- ─── HINTS & UTILS ─── -->
-  <div id="no-anchor-msg">
-    <p>Point at the menu to start AR</p>
+  <!-- ─── INFO CARD (AR) ─── -->
+  <div id="info-card" style="position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%); z-index: 40; background: #FFF; padding: 20px; border-radius: 24px; box-shadow: var(--shadow); width: 90%; max-width: 340px; display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+      <span class="info-name" style="font-weight: 800; font-size: 18px;"></span>
+      <span class="info-price" style="font-weight: 800; color: var(--primary);"></span>
+    </div>
+    <div class="info-desc" style="font-size: 13px; color: var(--text-muted);"></div>
   </div>
 
+  <!-- ─── UTILS ─── -->
+  <div id="no-anchor-msg"><p>Point at the menu to start AR</p></div>
   <div id="ar-hint"><span>👆</span> Swipe to browse</div>
-
   <div id="model-loading">
     <div class="skeleton-card">
       <div class="skeleton-image"></div>
       <div class="skeleton-line"></div>
-      <div class="skeleton-line short"></div>
+      <div class="skeleton-line" style="width: 60%"></div>
     </div>
   </div>
 
+  <!-- ─── CART SYSTEM ─── -->
+  <div id="cart-fab">🛒<span id="cart-badge">0</span></div>
+  <div id="cart-toast" style="position: fixed; bottom: 130px; left: 50%; transform: translateX(-50%); background: var(--text); color: #FFF; padding: 12px 24px; border-radius: 50px; font-weight: 600; display: none; z-index: 200;">Added to cart!</div>
 
-      <div id="dynamic-dish-desc"></div>
-
-      <div class="dyn-actions">
-        <button id="dynamic-view-ar-btn">🪄 View in Table</button>
-        <button id="dynamic-add-cart-btn">+ Add to Cart</button>
-      </div>
-    </div>
-
-  </div><!-- #dynamic-ui -->
-
-  <!-- ═══ DYNAMIC — FULL MENU SHEET ═══ -->
-  <div id="dynamic-menu-panel">
-    <div class="dynamic-menu-card">
-      <div id="dynamic-menu-handle-area">
-        <div class="dynamic-handle-bar"></div>
-        <div class="dynamic-menu-header">
-          <h3>Full Menu</h3>
-          <button id="dynamic-menu-close">Done</button>
-        </div>
-      </div>
-      <div class="categories" id="dynamic-categories">
-        <button class="cat-pill active" data-cat="all">All</button>
-      </div>
-      <div class="dish-grid" id="dynamic-dish-grid"></div>
-    </div>
-  </div>
-
-  <!-- ═══ CART TOAST ═══ -->
-  <div id="cart-toast"></div>
-
-  <!-- ═══ CART PANEL ═══ -->
   <div id="cart-panel">
     <div class="cart-sheet">
-      <div class="cart-header">
-        <h3>Your Cart</h3>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <h3 style="font-size: 24px; font-weight: 800;">Your Cart</h3>
         <button id="cart-panel-close">Close</button>
       </div>
       <div id="cart-items-list"></div>
-      <div class="cart-footer">
-        <div class="cart-total-row">
-          <span class="cart-total-label">Order Total</span>
-          <span id="cart-total-amount">₹0</span>
+      <div style="margin-top: 32px; border-top: 1px solid #EEE; padding-top: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+          <span style="font-weight: 600; color: var(--text-muted);">Total Amount</span>
+          <span id="cart-total-amount" style="font-size: 24px; font-weight: 900;">₹0</span>
         </div>
         <button id="cart-checkout-btn">Proceed to Checkout</button>
       </div>
     </div>
   </div>
 
-  <!-- ═══ CHECKOUT PANEL ═══ -->
   <div id="checkout-panel">
     <div class="checkout-inner">
-      <button class="checkout-back" id="checkout-back-btn">← Back to Cart</button>
-      <div class="checkout-title">Your Details</div>
-      <div class="checkout-subtitle">Fill in a few details to place your order</div>
-      <form id="checkout-form" novalidate>
-        <div class="checkout-field">
-          <label>Full Name</label>
-          <input type="text" name="cust-name" placeholder="e.g. Arjun Sharma" autocomplete="name" />
+      <button id="checkout-back-btn">← Back to Cart</button>
+      <h2 style="font-size: 32px; font-weight: 900; margin: 24px 0 8px;">Checkout</h2>
+      <p style="color: var(--text-muted); margin-bottom: 32px;">Please provide your details</p>
+      <form id="checkout-form">
+        <div class="checkout-field"><label>Full Name</label><input type="text" name="cust-name" placeholder="John Doe" required></div>
+        <div class="checkout-field"><label>Phone Number</label><input type="tel" name="cust-phone" placeholder="+91..." required></div>
+        <div class="checkout-field"><label>Table / Address</label><input type="text" name="cust-address" placeholder="Table 5" required></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div class="checkout-field"><label>Gender</label><select name="cust-gender" required><option value="male">Male</option><option value="female">Female</option></select></div>
+          <div class="checkout-field"><label>Age</label><input type="number" name="cust-age" placeholder="25" required></div>
         </div>
-        <div class="checkout-field">
-          <label>Phone Number</label>
-          <input type="tel" name="cust-phone" placeholder="e.g. 9876543210" autocomplete="tel" />
+        <div style="background: #F8F9FA; padding: 20px; border-radius: 20px; display: flex; justify-content: space-between; align-items: center; margin: 24px 0;">
+          <span style="font-weight: 600; color: var(--text-muted);">Payable</span>
+          <span id="checkout-total-display" style="font-size: 24px; font-weight: 900; color: var(--primary);">₹0</span>
         </div>
-        <div class="checkout-field">
-          <label>Table / Delivery Address</label>
-          <input type="text" name="cust-address" placeholder="e.g. Table 4 or your address" />
-        </div>
-        <div class="checkout-field">
-          <label>Gender</label>
-          <select name="cust-gender">
-            <option value="">Select gender</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-            <option value="prefer_not">Prefer not to say</option>
-          </select>
-        </div>
-        <div class="checkout-field">
-          <label>Age</label>
-          <input type="number" name="cust-age" placeholder="e.g. 25" min="1" max="120" />
-        </div>
-        <div class="checkout-total-box">
-          <span class="checkout-total-label">Order Total</span>
-          <span id="checkout-total-display">₹0</span>
-        </div>
-        <div id="checkout-form-error"></div>
-        <button type="submit" id="checkout-submit-btn">Place Order</button>
+        <div id="checkout-form-error" style="display: none; color: var(--primary); font-weight: 700; margin-bottom: 16px;"></div>
+        <button id="checkout-submit-btn" type="submit">Place Order</button>
       </form>
     </div>
   </div>
 
-  <!-- ═══ ORDER SUCCESS ═══ -->
-  <div id="order-success-screen">
-    <div class="result-icon-wrap">✅</div>
-    <div class="result-title">Order Placed!</div>
-    <div class="result-sub">Your order has been received.<br>We'll have it ready shortly.</div>
-    <div id="order-success-num">#00000</div>
-    <button id="order-done-btn">Done</button>
+  <div id="order-success-screen" style="position: fixed; inset: 0; z-index: 300; background: #FFF; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px;">
+    <div style="font-size: 80px; margin-bottom: 24px;">✅</div>
+    <h2 style="font-size: 32px; font-weight: 900; margin-bottom: 12px;">Order Placed!</h2>
+    <p style="color: var(--text-muted); margin-bottom: 32px;">Your delicious meal is being prepared.</p>
+    <div id="order-success-num" style="background: var(--primary-soft); color: var(--primary); font-weight: 800; padding: 12px 32px; border-radius: 50px;">#1024</div>
+    <button id="order-done-btn" style="margin-top: 40px; background: var(--text); color: #FFF; border: none; padding: 18px 60px; border-radius: 50px; font-weight: 700;">Back to Menu</button>
   </div>
 
-  <!-- ═══ ORDER ERROR ═══ -->
-  <div id="order-error-screen">
-    <div class="result-icon-wrap">❌</div>
-    <div class="result-title">Order Failed</div>
-    <div class="result-sub">Something went wrong.<br>Please try again.</div>
-    <button id="order-retry-btn" style="margin-top:32px">Try Again</button>
+  <div id="order-error-screen" style="position: fixed; inset: 0; z-index: 300; background: #FFF; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px;">
+    <div style="font-size: 80px; margin-bottom: 24px;">❌</div>
+    <h2 style="font-size: 32px; font-weight: 900; margin-bottom: 12px;">Order Failed</h2>
+    <button id="order-retry-btn" style="margin-top: 40px; background: var(--primary); color: #FFF; border: none; padding: 18px 60px; border-radius: 50px; font-weight: 700;">Try Again</button>
   </div>
 
-  <!-- ═══ BOOT SCRIPT ═══ -->
+  <!-- ─── SCRIPTS ─── -->
   <script src="./config.js"></script>
   <script type="module">
     import { ARSessionManager } from './js/ARSessionManager.js';
@@ -956,153 +336,79 @@
     import { State, setState }  from './js/StateManager.js';
 
     const DASHBOARD_API = window.__PALADEIUM_API__ || 'http://localhost:3000';
-
-    // Fallback menu — used when no ?r=slug is provided.
-    // Models require a real restaurant context so hasAR is false here.
-    let MENU = [
-      { id:'burger',   name:'Wagyu Smash Burger',     desc:'Double patty, aged cheddar, truffle aioli',                        price:'₹649', emoji:'🍔', cat:'mains',    model:null, modelScale:1.0, hasAR:false },
-      { id:'pizza',    name:'Margherita Classico',    desc:'San Marzano tomato, buffalo mozzarella',                           price:'₹549', emoji:'🍕', cat:'mains',    model:null, modelScale:1.0, hasAR:false },
-      { id:'pasta',    name:'Pasta Meatball Delight', desc:'Tonnarelli with slow-cooked meatballs in rich tomato basil sauce', price:'₹479', emoji:'🍝', cat:'mains',    model:null, modelScale:1.0, hasAR:false },
-      { id:'sandwich', name:'Signature Sandwich',     desc:'Grilled sourdough, roasted peppers, aged cheddar, herb aioli',    price:'₹329', emoji:'🥪', cat:'starters', model:null, modelScale:1.0, hasAR:false },
-      { id:'mojito',   name:'Virgin Mojito',           desc:'Fresh lime, mint, soda, brown sugar',                             price:'₹199', emoji:'🍹', cat:'drinks',   model:null, modelScale:1.0, hasAR:false },
-      { id:'pastry',   name:'Flaky Pastry Delight',   desc:'Warm Valrhona centre, vanilla bean ice cream',                    price:'₹299', emoji:'🥐', cat:'desserts', model:null, modelScale:1.0, hasAR:false },
-    ];
-    let CATEGORIES      = [];
-    let UI_TYPE         = 'ar';
+    let MENU = [];
+    let CATEGORIES = [];
+    let UI_TYPE = 'ar';
     let PAYMENT_ENABLED = false;
-    let cartManager     = null;
-
-    // ── Fetch & apply menu ──────────────────────────────────────
+    let cartManager = null;
 
     async function fetchMenu() {
       const slug = new URLSearchParams(location.search).get('r');
       setState({ restaurantSlug: slug });
-      if (!slug) { _applyMenu(); return; }
+      if (!slug) return;
 
       try {
         const res = await fetch(`${DASHBOARD_API}/api/restaurants/${slug}/menu`);
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data.menu) && data.menu.length) {
-            MENU = data.menu.map(item => ({
-              id:         item.id,
-              name:       item.name,
-              desc:       item.desc ?? '',
-              price:      typeof item.price === 'number' ? '₹' + item.price : (item.price ?? ''),
-              emoji:      item.emoji ?? '🍽',
-              cat:        (item.cat ?? 'other').toLowerCase(),
-              model:      item.model ? _resolveModel(item.model) : null,
-              modelScale: item.modelScale ?? 1.0,
-              hasAR:      item.hasAR ?? false,
-            }));
-          }
-          CATEGORIES      = data.categories ?? [];
-          UI_TYPE         = data.restaurant?.uiType         ?? 'ar';
-          PAYMENT_ENABLED = data.restaurant?.paymentEnabled ?? false;
-          window._arOverlayEnabled       = data.restaurant?.arOverlayEnabled       ?? false;
-          window._markerDetectionEnabled = data.restaurant?.markerDetectionEnabled ?? true;
-
-          // Show restaurant name in dynamic header if available
-          const nameEl = document.querySelector('.dynamic-brand');
-          if (nameEl && data.restaurant?.name) {
-            nameEl.innerHTML = data.restaurant.name;
-          }
+          MENU = (data.menu || []).map(item => ({
+            ...item,
+            model: item.model ? _resolveModel(item.model) : null,
+            cat: (item.cat || 'other').toLowerCase()
+          }));
+          CATEGORIES = data.categories || [];
+          UI_TYPE = data.restaurant?.uiType || 'ar';
+          PAYMENT_ENABLED = data.restaurant?.paymentEnabled || false;
+          
+          const brandEls = document.querySelectorAll('.brand, .dynamic-brand');
+          brandEls.forEach(el => { if (data.restaurant?.name) el.innerHTML = data.restaurant.name; });
         }
-      } catch (e) {
-        console.warn('[Paladeium] API unavailable — using default menu', e);
-      }
-      _applyMenu();
-    }
-
-    function _resolveModel(url) {
-      if (!url) return null;
-      if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('data:')) return url;
-      if (url.startsWith('/api/')) return DASHBOARD_API + url;
-      return url;
-    }
-
-    function _applyMenu() {
+      } catch (e) { console.warn('Menu fetch failed', e); }
+      
       const arMenu = MENU.filter(m => m.hasAR && m.model);
       setState({ menuItems: arMenu, uiType: UI_TYPE, paymentEnabled: PAYMENT_ENABLED });
-      window._allMenuItems   = MENU;
+      window._allMenuItems = MENU;
       window._menuCategories = CATEGORIES;
     }
 
-    // ── Launch AR ───────────────────────────────────────────────
+    function _resolveModel(url) {
+      if (!url || url.startsWith('http')) return url;
+      return DASHBOARD_API + url;
+    }
 
-    let arStarted = false;
     async function launchAR(preSelectIndex) {
-      if (arStarted) return;
-      arStarted = true;
       document.getElementById('splash-screen')?.classList.add('hidden');
-
-      if (!window._arOverlayEnabled) {
-        ['status-bar','surface-tap-hint'].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) el.style.display = 'none';
-        });
-      }
-
-      if (typeof preSelectIndex === 'number' && preSelectIndex >= 0) {
-        setState({ currentDishIndex: preSelectIndex });
-      }
-
+      if (typeof preSelectIndex === 'number') setState({ currentDishIndex: preSelectIndex });
       try {
         window._arManager = new ARSessionManager();
         await window._arManager.start();
-      } catch (e) {
-        arStarted = false;
-        document.getElementById('splash-screen')?.classList.remove('hidden');
-        console.error(e);
-        alert('AR failed: ' + e.message);
-      }
+      } catch (e) { console.error(e); }
     }
-
-    // ── Launch Dynamic ──────────────────────────────────────────
 
     function launchDynamic() {
       document.getElementById('splash-screen')?.classList.add('hidden');
-
-      ['status-bar','no-anchor-msg','scan-ring','surface-tap-hint',
-       'model-loading','tutorial-overlay','info-card','ar-hint','menu-panel'
-      ].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-      });
-
       document.getElementById('dynamic-container').style.display = 'block';
       document.getElementById('dynamic-ui').classList.add('active');
-
       if (PAYMENT_ENABLED) {
         cartManager = new CartManager({ apiBase: DASHBOARD_API, restaurantSlug: State.restaurantSlug });
         document.getElementById('cart-fab')?.classList.add('visible');
       }
-
       window._dynManager = new DynamicUIManager({
         paymentEnabled: PAYMENT_ENABLED,
-        onViewInTable: (dishIndex) => {
-          ['dynamic-container','dynamic-ui','dynamic-menu-panel'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = 'none';
-          });
-          launchAR(dishIndex);
+        onViewInTable: (idx) => {
+          document.getElementById('dynamic-ui').classList.remove('active');
+          document.getElementById('dynamic-container').style.display = 'none';
+          launchAR(idx);
         },
-        onAddToCart: (item) => { if (cartManager) cartManager.addItem(item); },
+        onAddToCart: (item) => cartManager?.addItem(item)
       });
-
       window._dynManager.start();
     }
 
-    // ── Boot ────────────────────────────────────────────────────
-
     async function init() {
       await fetchMenu();
-      const openBtn = document.getElementById('open-menu-btn');
-      if (UI_TYPE === 'dynamic') {
-        launchDynamic();
-      } else {
-        openBtn?.addEventListener('click', () => launchAR());
-      }
+      if (UI_TYPE === 'dynamic') launchDynamic();
+      else document.getElementById('open-menu-btn')?.addEventListener('click', () => launchAR());
     }
 
     init();
