@@ -1,0 +1,14 @@
+{
+  "id": "demo-restaurant-1",
+  "name": "The Grand Spice",
+  "slug": "the-grand-spice",
+  "description": "Premium dining with AR menus",
+  "status": "active",
+  "targetsUrl": null,
+  "markerDetectionEnabled": true,
+  "arOverlayEnabled": false,
+  "uiType": "dynamic",
+  "paymentEnabled": false,
+  "createdAt": "2026-04-25T10:00:00Z",
+  "updatedAt": "2026-04-25T10:00:00Z"
+}

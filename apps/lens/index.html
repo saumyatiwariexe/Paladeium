@@ -5,15 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Paladeium — AR Menu</title>
 
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet" />
 
-  <!-- ES Module Shims: Polyfill for import maps in older browsers (e.g. iOS < 16.4) -->
-  <!-- NOTE: Must NOT have `async` — the shim must execute before any import() calls -->
   <script src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
-
-  <!-- Importmap for Three.js and MindAR -->
   <script type="importmap">
   {
     "imports": {
@@ -25,1024 +20,792 @@
   </script>
 
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
+    /* ═══════════════════════════════════════════════
+       DESIGN TOKENS — Dark Neumorphism Food
+    ═══════════════════════════════════════════════ */
     :root {
-      --gold:    #D4A853;
-      --gold-lt: #F0C97A;
-      --dark:    #0A0A0F;
-      --card-bg: rgba(10, 10, 20, 0.82);
-      --border:  rgba(212, 168, 83, 0.25);
-      --text:    #F0EDE8;
-      --muted:   rgba(240,237,232,0.55);
+      --bg:           #0e0e1c;
+      --surface:      #13132a;
+      --surface-2:    #191932;
+      --gold:         #d4a853;
+      --gold-lt:      #f0c97a;
+      --gold-dim:     rgba(212,168,83,0.18);
+      --text:         #ece8f5;
+      --muted:        rgba(236,232,245,0.45);
+      --muted-2:      rgba(236,232,245,0.25);
+      --border:       rgba(212,168,83,0.18);
+      --border-sub:   rgba(255,255,255,0.06);
+
+      /* Neumorphic shadow pair */
+      --ns-light: -5px -5px 12px rgba(255,255,255,0.045);
+      --ns-dark:   6px  6px 16px rgba(0,0,0,0.70);
+      --ns-sm-light: -3px -3px 8px rgba(255,255,255,0.04);
+      --ns-sm-dark:   4px  4px 10px rgba(0,0,0,0.65);
+
+      /* Inset (pressed) */
+      --ni-light: inset -3px -3px 7px rgba(255,255,255,0.04);
+      --ni-dark:  inset  4px  4px 10px rgba(0,0,0,0.6);
     }
 
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
     html, body {
-      width: 100%; height: 100%;
-      overflow: hidden;
-      background: transparent !important;
-      font-family: 'Inter', sans-serif;
+      width:100%; height:100%; overflow:hidden;
+      background: var(--bg);
+      font-family:'Inter', sans-serif;
       color: var(--text);
-      -webkit-font-smoothing: antialiased;
+      -webkit-font-smoothing:antialiased;
     }
 
-    /* ─── AR Canvas Container ─── */
+    /* ── Neumorphic helpers ── */
+    .neu { background:var(--surface); box-shadow: var(--ns-light), var(--ns-dark); }
+    .neu-sm { background:var(--surface); box-shadow: var(--ns-sm-light), var(--ns-sm-dark); }
+    .neu-in { box-shadow: var(--ni-light), var(--ni-dark); }
+    .neu-gold {
+      background: linear-gradient(135deg, #c9983f 0%, #e8c06a 50%, #c9983f 100%);
+      box-shadow: var(--ns-light), var(--ns-dark),
+                  inset 0 1px 0 rgba(255,255,255,0.25);
+    }
+
+    /* ═══════════════════════════════════════════════
+       SPLASH SCREEN
+    ═══════════════════════════════════════════════ */
+    #splash-screen {
+      position:fixed; inset:0; z-index:200;
+      background: radial-gradient(ellipse 130% 90% at 50% -5%, #1e1040 0%, #0e0e1c 55%);
+      display:flex; align-items:center; justify-content:center; flex-direction:column;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    #splash-screen.hidden { opacity:0; pointer-events:none; transform:scale(1.04); }
+
+    .splash-inner {
+      display:flex; flex-direction:column; align-items:center;
+      gap:10px; padding:48px 36px; text-align:center; width:100%; max-width:340px;
+    }
+    .splash-plate {
+      width:96px; height:96px; border-radius:50%;
+      background:var(--surface);
+      box-shadow: var(--ns-light), var(--ns-dark),
+                  inset 0 0 0 1px rgba(212,168,83,0.15);
+      display:flex; align-items:center; justify-content:center;
+      font-size:46px; margin-bottom:20px;
+    }
+    .splash-logo {
+      font-family:'Playfair Display', serif;
+      font-size:36px; font-weight:800; letter-spacing:0.5px;
+      color:var(--gold); line-height:1;
+    }
+    .splash-logo span { color:var(--text); font-weight:300; }
+    .splash-tagline {
+      font-size:10px; letter-spacing:3px; text-transform:uppercase;
+      color:var(--muted); margin-top:4px;
+    }
+    #open-menu-btn {
+      margin-top:48px; width:100%;
+      padding:18px 0;
+      border:none; border-radius:18px; cursor:pointer;
+      font-size:15px; font-weight:700; letter-spacing:0.6px;
+      color:#0e0e1c;
+      background: linear-gradient(135deg, #c9983f 0%, #e8c06a 48%, #c9983f 100%);
+      box-shadow: -4px -4px 10px rgba(255,255,255,0.05),
+                   6px  6px 18px rgba(0,0,0,0.70),
+                   inset 0 1px 0 rgba(255,255,255,0.3);
+      font-family:'Inter', sans-serif;
+      transition: transform 0.14s ease, box-shadow 0.14s ease;
+    }
+    #open-menu-btn:active {
+      transform:scale(0.97);
+      box-shadow: var(--ni-light), var(--ni-dark);
+    }
+
+    /* ═══════════════════════════════════════════════
+       AR CANVAS CONTAINER
+    ═══════════════════════════════════════════════ */
     #ar-container {
-      position: fixed; inset: 0;
-      z-index: 0;
+      position:fixed; inset:0; z-index:0;
     }
-    #ar-container > canvas.mindar-canvas {
-      width: 100% !important;
-      height: 100% !important;
-    }
-    #demo-canvas {
-      position: absolute !important;
-      inset: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
+    #ar-container > canvas.mindar-canvas,
+    #ar-container > canvas {
+      width:100% !important; height:100% !important;
     }
 
-
-    
-    /* ─── Info Card ─── */
-    #info-card {
-      position: fixed;
-      bottom: 110px; left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      z-index: 35;
-      background: var(--card-bg);
-      backdrop-filter: blur(24px) saturate(160%);
-      -webkit-backdrop-filter: blur(24px) saturate(160%);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 16px 20px;
-      width: 90%; max-width: 340px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-      opacity: 0; pointer-events: none;
-      transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-    }
-    #info-card.visible {
-      opacity: 1; pointer-events: auto;
-      transform: translateX(-50%) translateY(0);
-    }
-    .info-header {
-      display: flex; justify-content: space-between; align-items: baseline;
-      margin-bottom: 6px;
-    }
-    .info-name {
-      font-size: 16px; font-weight: 700; color: var(--text);
-    }
-    .info-price {
-      font-size: 16px; font-weight: 700; color: var(--gold);
-      font-family: 'Playfair Display', serif;
-    }
-    .info-desc {
-      font-size: 12px; color: var(--muted); line-height: 1.4;
-    }
-
-    /* ─── Top Status Bar ─── */
+    /* ═══════════════════════════════════════════════
+       AR UI — TOP STATUS BAR
+    ═══════════════════════════════════════════════ */
     #status-bar {
-      position: fixed; top: 0; left: 0; right: 0;
-      z-index: 50;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 18px 12px;
-      pointer-events: none;
+      position:fixed; top:0; left:0; right:0; z-index:50;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:16px 20px 14px;
+      pointer-events:none;
     }
     .brand {
-      font-family: 'Playfair Display', serif;
-      font-size: 17px; font-weight: 700;
-      letter-spacing: 0.8px;
-      color: var(--gold);
+      font-family:'Playfair Display', serif;
+      font-size:18px; font-weight:700; letter-spacing:0.8px; color:var(--gold);
     }
-    .brand span { color: var(--text); font-weight: 300; }
+    .brand span { color:var(--text); font-weight:300; }
     #anchor-status {
-      font-size: 11px; font-weight: 500; letter-spacing: 0.6px;
-      padding: 4px 10px; border-radius: 20px;
-      background: rgba(212,168,83,0.12);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      display: flex; align-items: center; gap: 6px;
-      transition: all 0.4s ease;
+      font-size:11px; font-weight:500; letter-spacing:0.5px;
+      padding:5px 12px; border-radius:20px;
+      background:var(--surface);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark);
+      color:var(--muted);
+      display:flex; align-items:center; gap:6px;
+      transition:all 0.4s ease;
     }
     #anchor-status.found {
-      background: rgba(80,200,80,0.12);
-      border-color: rgba(80,200,80,0.35);
-      color: rgb(140,230,140);
+      background:rgba(60,180,60,0.14);
+      color:rgb(130,220,130);
+      box-shadow:none;
     }
     .dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: currentColor;
-      animation: pulse 2s ease-in-out infinite;
+      width:6px; height:6px; border-radius:50%;
+      background:currentColor;
+      animation:pulse 2s ease-in-out infinite;
     }
-    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-    /* ─── Floating Menu Panel ─── */
-    #menu-panel {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      z-index: 40;
-      transform: translateY(100%);
-      transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-      padding: 0 12px 20px;
+    /* ═══════════════════════════════════════════════
+       AR UI — INFO CARD
+    ═══════════════════════════════════════════════ */
+    #info-card {
+      position:fixed; bottom:130px; left:50%;
+      transform:translateX(-50%) translateY(18px);
+      z-index:35; width:90%; max-width:350px;
+      background:var(--surface);
+      box-shadow: var(--ns-light), var(--ns-dark),
+                  inset 0 0 0 1px var(--border-sub);
+      border-radius:24px; padding:18px 20px;
+      opacity:0; pointer-events:none;
+      transition:all 0.4s cubic-bezier(0.22,1,0.36,1);
     }
-    #menu-panel.visible { transform: translateY(0); }
-    #menu-panel.minimized { transform: translateY(calc(100% - 70px)); }
+    #info-card.visible {
+      opacity:1; pointer-events:auto; transform:translateX(-50%) translateY(0);
+    }
+    .info-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px; }
+    .info-name { font-size:16px; font-weight:700; color:var(--text); }
+    .info-price { font-size:16px; font-weight:700; color:var(--gold); font-family:'Playfair Display',serif; }
+    .info-desc { font-size:12px; color:var(--muted); line-height:1.45; }
+
+    /* ═══════════════════════════════════════════════
+       AR UI — NO ANCHOR PROMPT
+    ═══════════════════════════════════════════════ */
+    #no-anchor-msg {
+      position:fixed; top:50%; left:50%;
+      transform:translate(-50%,-50%) scale(0.9);
+      z-index:45; text-align:center;
+      background:var(--surface);
+      box-shadow: var(--ns-light), var(--ns-dark);
+      border-radius:20px; padding:20px 26px;
+      font-size:13px; color:var(--muted);
+      opacity:0; pointer-events:none;
+      transition:all 0.4s ease;
+    }
+    #no-anchor-msg.visible { opacity:1; transform:translate(-50%,-50%) scale(1); }
+    #no-anchor-msg .icon { font-size:32px; margin-bottom:10px; }
+    #no-anchor-msg p { line-height:1.5; }
+    #no-anchor-msg strong { color:var(--gold); }
+
+    /* ═══════════════════════════════════════════════
+       AR UI — SCAN RING
+    ═══════════════════════════════════════════════ */
+    #scan-ring {
+      position:fixed; top:50%; left:50%;
+      transform:translate(-50%,-50%);
+      z-index:45; width:110px; height:110px; border-radius:50%;
+      pointer-events:none; opacity:0; transition:opacity 0.4s ease;
+    }
+    #scan-ring.visible { opacity:1; }
+    .scan-ring-track { position:absolute; inset:0; border-radius:50%; border:2px solid rgba(212,168,83,0.15); }
+    .scan-ring-fill  {
+      position:absolute; inset:0; border-radius:50%;
+      border:2.5px solid transparent;
+      border-top-color:var(--gold); border-right-color:var(--gold);
+      transition:transform 0.25s ease;
+    }
+    #scan-ring.ready .scan-ring-fill { border-color:var(--gold); animation:spin-complete 0.4s ease forwards; }
+    @keyframes spin-complete { to { transform:rotate(360deg); opacity:0.6; } }
+    .scan-ring-icon {
+      position:absolute; inset:0; display:flex;
+      align-items:center; justify-content:center; font-size:22px;
+    }
+
+    /* ═══════════════════════════════════════════════
+       AR UI — SURFACE HINT & CONTROLS
+    ═══════════════════════════════════════════════ */
+    #surface-tap-hint {
+      position:fixed; bottom:220px; left:50%; transform:translateX(-50%);
+      z-index:45; background:var(--surface);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark);
+      border-radius:50px; padding:10px 24px;
+      font-size:13px; font-weight:500; color:var(--text);
+      display:none; align-items:center; gap:8px;
+      white-space:nowrap; pointer-events:none;
+    }
+    #surface-tap-hint.visible { display:flex; }
+    .tap-pulse {
+      width:8px; height:8px; border-radius:50%; background:var(--gold);
+      animation:pulse 1.5s ease-in-out infinite;
+    }
+    #surface-controls {
+      position:fixed; bottom:380px; left:50%; transform:translateX(-50%);
+      z-index:45; display:none; gap:10px; align-items:center;
+    }
+    #surface-reposition-btn {
+      background:var(--surface);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark);
+      border:none; border-radius:50px;
+      padding:10px 22px; font-size:13px; font-weight:600;
+      font-family:'Inter',sans-serif; color:var(--muted); cursor:pointer;
+    }
+
+    /* ═══════════════════════════════════════════════
+       AR UI — SKELETON / LOADING
+    ═══════════════════════════════════════════════ */
+    #model-loading {
+      position:fixed; top:50%; left:50%;
+      transform:translate(-50%,-50%);
+      z-index:60; opacity:0; pointer-events:none; transition:opacity 0.3s ease;
+    }
+    #model-loading.visible { opacity:1; }
+    .skeleton-card {
+      background:var(--surface);
+      box-shadow: var(--ns-light), var(--ns-dark);
+      border-radius:20px; padding:22px; width:230px;
+      display:flex; flex-direction:column; gap:14px;
+    }
+    .skeleton-image {
+      width:100%; height:130px; border-radius:12px;
+      background:linear-gradient(90deg,rgba(212,168,83,0.08) 25%,rgba(212,168,83,0.18) 50%,rgba(212,168,83,0.08) 75%);
+      background-size:200% 100%; animation:shimmer 1.6s infinite;
+    }
+    .skeleton-line {
+      height:12px; border-radius:6px;
+      background:linear-gradient(90deg,rgba(212,168,83,0.08) 25%,rgba(212,168,83,0.18) 50%,rgba(212,168,83,0.08) 75%);
+      background-size:200% 100%; animation:shimmer 1.6s infinite;
+    }
+    .skeleton-line.short { width:55%; }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+    /* ═══════════════════════════════════════════════
+       AR UI — TUTORIAL OVERLAY
+    ═══════════════════════════════════════════════ */
+    #tutorial-overlay {
+      position:fixed; inset:0; z-index:55;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      opacity:0; pointer-events:none; transition:opacity 0.4s ease;
+    }
+    #tutorial-overlay.visible { opacity:1; pointer-events:auto; }
+    .tutorial-hand { font-size:54px; animation:swipe-hand 2s ease-in-out infinite; margin-bottom:20px; }
+    .tutorial-text { font-size:16px; font-weight:600; color:#fff; text-shadow:0 2px 12px rgba(0,0,0,0.8); }
+    @keyframes swipe-hand {
+      0%   { transform:translateX(50px) rotate(10deg); opacity:0; }
+      20%  { transform:translateX(50px) rotate(10deg); opacity:1; }
+      80%  { transform:translateX(-50px) rotate(-10deg); opacity:1; }
+      100% { transform:translateX(-50px) rotate(-10deg); opacity:0; }
+    }
+
+    /* ═══════════════════════════════════════════════
+       AR UI — SWIPE HINT
+    ═══════════════════════════════════════════════ */
+    #ar-hint {
+      position:fixed; bottom:390px; left:50%;
+      transform:translateX(-50%) translateY(18px);
+      z-index:45; background:var(--surface);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark);
+      border-radius:24px; padding:8px 18px;
+      font-size:12px; color:var(--muted);
+      display:flex; align-items:center; gap:8px;
+      opacity:0; transition:all 0.5s ease; pointer-events:none; white-space:nowrap;
+    }
+    #ar-hint.visible { opacity:1; transform:translateX(-50%) translateY(0); }
+
+    /* ═══════════════════════════════════════════════
+       AR UI — MENU PANEL (bottom sheet)
+    ═══════════════════════════════════════════════ */
+    #menu-panel {
+      position:fixed; bottom:0; left:0; right:0; z-index:40;
+      transform:translateY(100%);
+      transition:transform 0.55s cubic-bezier(0.22,1,0.36,1);
+      padding:0 12px 22px;
+    }
+    #menu-panel.visible { transform:translateY(0); }
+    #menu-panel.minimized { transform:translateY(calc(100% - 72px)); }
 
     .menu-handle-container {
-      width: 100%;
-      cursor: pointer;
-      padding-top: 5px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      width:100%; cursor:pointer; padding-top:6px;
+      display:flex; flex-direction:column; align-items:center;
     }
-
     .menu-handle {
-      width: 40px; height: 4px; border-radius: 2px;
-      background: var(--border);
-      margin: 0 auto 14px;
+      width:38px; height:4px; border-radius:2px;
+      background:rgba(212,168,83,0.28); margin:0 auto 14px;
     }
-
     .menu-card {
-      background: var(--card-bg);
-      backdrop-filter: blur(24px) saturate(160%);
-      -webkit-backdrop-filter: blur(24px) saturate(160%);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 20px 18px 16px;
-      box-shadow: 0 -8px 48px rgba(0,0,0,0.6), 0 0 0 0.5px rgba(255,255,255,0.04);
+      background:var(--surface);
+      box-shadow: -8px -8px 24px rgba(255,255,255,0.035), 0 -4px 32px rgba(0,0,0,0.75),
+                  inset 0 0 0 1px var(--border-sub);
+      border-radius:24px; padding:20px 18px 16px;
     }
-
     .menu-header {
-      display: flex; align-items: baseline; justify-content: space-between;
-      margin-bottom: 16px;
+      display:flex; align-items:baseline; justify-content:space-between; margin-bottom:16px;
     }
     .menu-header h3 {
-      font-family: 'Playfair Display', serif;
-      font-size: 20px; font-weight: 700;
-      color: var(--text);
+      font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:var(--text);
     }
-    .menu-header .subtitle {
-      font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase;
-      color: var(--gold); font-weight: 500;
-    }
+    .menu-header .subtitle { font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:var(--gold); font-weight:500; }
 
     /* Category pills */
-    .categories {
-      display: flex; gap: 8px;
-      overflow-x: auto; margin-bottom: 16px;
-      padding-bottom: 2px;
-      scrollbar-width: none;
-    }
-    .categories::-webkit-scrollbar { display: none; }
+    .categories { display:flex; gap:8px; overflow-x:auto; margin-bottom:16px; padding-bottom:2px; scrollbar-width:none; }
+    .categories::-webkit-scrollbar { display:none; }
     .cat-pill {
-      flex-shrink: 0;
-      padding: 6px 14px; border-radius: 20px;
-      font-size: 12px; font-weight: 500; letter-spacing: 0.3px;
-      border: 1px solid var(--border);
-      background: transparent; color: var(--muted);
-      cursor: pointer;
-      transition: all 0.2s ease;
+      flex-shrink:0; padding:7px 16px; border-radius:20px;
+      font-size:12px; font-weight:500;
+      border:none;
+      background:var(--surface-2);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark);
+      color:var(--muted); cursor:pointer; transition:all 0.2s ease;
     }
     .cat-pill.active {
-      background: var(--gold);
-      border-color: var(--gold);
-      color: #0A0A0F; font-weight: 600;
+      background:linear-gradient(135deg,#c9983f,#e8c06a);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark), inset 0 1px 0 rgba(255,255,255,0.2);
+      color:#0e0e1c; font-weight:700;
     }
 
     /* Dish grid */
-    .dish-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-    }
-
+    .dish-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
     .dish-card {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 14px 12px;
-      cursor: pointer;
-      transition: all 0.22s ease;
-      position: relative;
-      overflow: hidden;
+      background:var(--surface-2);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark),
+                  inset 0 0 0 1px var(--border-sub);
+      border-radius:18px; padding:14px 12px;
+      cursor:pointer; transition:all 0.2s ease; position:relative; overflow:hidden;
     }
-    .dish-card::before {
-      content: '';
-      position: absolute; inset: 0;
-      background: linear-gradient(135deg, rgba(212,168,83,0.08) 0%, transparent 60%);
-      opacity: 0;
-      transition: opacity 0.2s ease;
-    }
-    .dish-card:active { transform: scale(0.97); }
+    .dish-card:active { transform:scale(0.97); box-shadow: var(--ni-light), var(--ni-dark); }
     .dish-card.active {
-      border-color: var(--gold);
-      background: rgba(212,168,83,0.08);
+      background:var(--surface);
+      box-shadow: inset -3px -3px 8px rgba(255,255,255,0.04),
+                  inset 4px 4px 10px rgba(0,0,0,0.55),
+                  inset 0 0 0 1px rgba(212,168,83,0.28);
     }
-    .dish-card.active::before { opacity: 1; }
-
-    .dish-emoji { font-size: 28px; margin-bottom: 8px; display: block; }
-    .dish-name {
-      font-size: 13px; font-weight: 600;
-      color: var(--text);
-      margin-bottom: 4px;
-      line-height: 1.3;
-    }
-    .dish-desc {
-      font-size: 10px; color: var(--muted);
-      margin-bottom: 8px;
-      line-height: 1.4;
-    }
-    .dish-price {
-      font-size: 14px; font-weight: 700;
-      color: var(--gold);
-      font-family: 'Playfair Display', serif;
-    }
+    .dish-emoji { font-size:28px; margin-bottom:8px; display:block; }
+    .dish-name { font-size:13px; font-weight:600; color:var(--text); margin-bottom:4px; line-height:1.3; }
+    .dish-desc { font-size:10px; color:var(--muted); margin-bottom:8px; line-height:1.4; }
+    .dish-price { font-size:14px; font-weight:700; color:var(--gold); font-family:'Playfair Display',serif; }
     .dish-ar-badge {
-      position: absolute; top: 8px; right: 8px;
-      font-size: 9px; font-weight: 600; letter-spacing: 0.5px;
-      padding: 2px 7px; border-radius: 6px;
-      background: rgba(212,168,83,0.15);
-      border: 1px solid rgba(212,168,83,0.3);
-      color: var(--gold);
+      position:absolute; top:8px; right:8px;
+      font-size:8px; font-weight:700; letter-spacing:0.8px;
+      padding:3px 7px; border-radius:6px;
+      background:rgba(212,168,83,0.14);
+      box-shadow: inset 0 0 0 1px rgba(212,168,83,0.3);
+      color:var(--gold);
     }
-
-    /* ─── 3D Viewer Hint ─── */
-    #ar-hint {
-      position: fixed; bottom: 380px; left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      z-index: 45;
-      background: var(--card-bg);
-      backdrop-filter: blur(16px);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 8px 18px;
-      font-size: 12px; color: var(--muted);
-      display: flex; align-items: center; gap: 8px;
-      opacity: 0;
-      transition: all 0.5s ease;
-      pointer-events: none;
-      white-space: nowrap;
-    }
-    #ar-hint.visible {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-    #ar-hint .hint-icon { font-size: 16px; }
-
-    /* ─── No Anchor Prompt ─── */
-    #no-anchor-msg {
-      position: fixed; top: 50%; left: 50%;
-      transform: translate(-50%, -50%) scale(0.9);
-      z-index: 45;
-      background: var(--card-bg);
-      backdrop-filter: blur(16px);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 16px 22px;
-      text-align: center;
-      font-size: 13px; color: var(--muted);
-      opacity: 0;
-      transition: all 0.4s ease;
-      pointer-events: none;
-    }
-    #no-anchor-msg.visible {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
-    }
-    #no-anchor-msg .icon { font-size: 28px; margin-bottom: 8px; }
-    #no-anchor-msg p { line-height: 1.5; }
-    #no-anchor-msg strong { color: var(--gold); }
-
-    /* ─── Surface Mode ─── */
-    #surface-controls {
-      position: fixed; bottom: 380px; left: 50%;
-      transform: translateX(-50%);
-      z-index: 45;
-      display: none;
-      gap: 10px;
-      align-items: center;
-    }
-    #surface-reposition-btn {
-      background: rgba(10,10,20,0.82);
-      backdrop-filter: blur(16px);
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      padding: 10px 22px;
-      font-size: 13px; font-weight: 600;
-      font-family: 'Inter', sans-serif;
-      color: var(--muted);
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    #surface-reposition-btn:active { transform: scale(0.96); }
-
-    /* ─── Scanning Ring ─── */
-    #scan-ring {
-      position: fixed; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 45;
-      width: 110px; height: 110px;
-      border-radius: 50%;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.4s ease;
-    }
-    #scan-ring.visible { opacity: 1; }
-    .scan-ring-track {
-      position: absolute; inset: 0; border-radius: 50%;
-      border: 2px solid rgba(212,168,83,0.18);
-    }
-    .scan-ring-fill {
-      position: absolute; inset: 0; border-radius: 50%;
-      border: 2.5px solid transparent;
-      border-top-color: var(--gold);
-      border-right-color: var(--gold);
-      transition: transform 0.25s ease;
-    }
-    #scan-ring.ready .scan-ring-fill {
-      border-color: var(--gold);
-      animation: spin-complete 0.4s ease forwards;
-    }
-    @keyframes spin-complete {
-      to { transform: rotate(360deg); opacity: 0.6; }
-    }
-    .scan-ring-icon {
-      position: absolute; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px;
-    }
-
-    #surface-tap-hint {
-      position: fixed; bottom: 220px; left: 50%;
-      transform: translateX(-50%);
-      z-index: 45;
-      background: var(--card-bg);
-      backdrop-filter: blur(16px);
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      padding: 10px 22px;
-      font-size: 13px; font-weight: 500;
-      color: var(--text);
-      display: none;
-      align-items: center; gap: 8px;
-      white-space: nowrap;
-      pointer-events: none;
-    }
-    #surface-tap-hint.visible { display: flex; }
-    .tap-pulse {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--gold);
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    /* ─── Loading Spinner ─── */
-    /* ─── Skeleton Loading ─── */
-    #model-loading {
-      position: fixed; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 60;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.3s ease;
-    }
-    #model-loading.visible { opacity: 1; }
-    
-    .skeleton-card {
-      background: rgba(10, 10, 20, 0.85);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px;
-      width: 220px;
-      display: flex; flex-direction: column; gap: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-    }
-    .skeleton-image {
-      width: 100%; height: 120px;
-      border-radius: 8px;
-      background: linear-gradient(90deg, rgba(212,168,83,0.1) 25%, rgba(212,168,83,0.2) 50%, rgba(212,168,83,0.1) 75%);
-      background-size: 200% 100%;
-      animation: skeleton-shimmer 1.5s infinite;
-    }
-    .skeleton-line {
-      height: 12px; width: 100%;
-      border-radius: 6px;
-      background: linear-gradient(90deg, rgba(212,168,83,0.1) 25%, rgba(212,168,83,0.2) 50%, rgba(212,168,83,0.1) 75%);
-      background-size: 200% 100%;
-      animation: skeleton-shimmer 1.5s infinite;
-    }
-    .skeleton-line.short { width: 60%; }
-    
-    @keyframes skeleton-shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
-
-    #tutorial-overlay {
-      position: fixed; inset: 0;
-      z-index: 55;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.4s ease;
-    }
-    #tutorial-overlay.visible {
-      opacity: 1; pointer-events: auto;
-    }
-    .tutorial-hand {
-      font-size: 54px;
-      animation: swipe-hand 2s ease-in-out infinite;
-      margin-bottom: 20px;
-    }
-    .tutorial-text {
-      font-size: 16px; font-weight: 600; color: #fff;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-      letter-spacing: 0.5px;
-    }
-    @keyframes swipe-hand {
-      0% { transform: translateX(50px) rotate(10deg); opacity: 0; }
-      20% { transform: translateX(50px) rotate(10deg); opacity: 1; }
-      80% { transform: translateX(-50px) rotate(-10deg); opacity: 1; }
-      100% { transform: translateX(-50px) rotate(-10deg); opacity: 0; }
-    }
-
-    /* ─── Splash Screen ─── */
-    #splash-screen {
-      position: fixed; inset: 0;
-      z-index: 200;
-      background: var(--dark);
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column;
-      transition: opacity 0.4s ease;
-    }
-    #splash-screen.hidden { opacity: 0; pointer-events: none; }
-    .splash-inner {
-      display: flex; flex-direction: column; align-items: center; gap: 12px;
-      padding: 40px 32px; text-align: center;
-    }
-    .splash-logo {
-      font-family: 'Playfair Display', serif;
-      font-size: 40px; font-weight: 700;
-      color: var(--gold); letter-spacing: 1px;
-      margin-bottom: 4px;
-    }
-    .splash-logo span { color: var(--text); font-weight: 300; }
-    .splash-tagline {
-      font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase;
-      color: var(--muted);
-    }
-    #open-menu-btn {
-      margin-top: 48px;
-      background: var(--gold);
-      color: #0A0A0F;
-      border: none; border-radius: 50px;
-      padding: 18px 56px;
-      font-size: 16px; font-weight: 700;
-      font-family: 'Inter', sans-serif;
-      letter-spacing: 0.5px;
-      cursor: pointer;
-      box-shadow: 0 4px 32px rgba(212,168,83,0.4);
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-    }
-    #open-menu-btn:active { transform: scale(0.96); box-shadow: 0 2px 16px rgba(212,168,83,0.25); }
 
     /* ═══════════════════════════════════════════════
-       DYNAMIC UI MODE
+       DYNAMIC UI — BACKGROUND CANVAS
     ═══════════════════════════════════════════════ */
-
-    /* Dark gradient background for Dynamic mode */
     #dynamic-container {
-      position: fixed; inset: 0;
-      z-index: 0;
-      background: radial-gradient(ellipse at 50% 30%, #1a1020 0%, #0A0A0F 70%);
-      display: none;
+      position:fixed; inset:0; z-index:0; display:none;
+      background: radial-gradient(ellipse 120% 70% at 50% -10%, #1e1040 0%, #0e0e1c 60%);
     }
     #dynamic-container canvas {
-      position: absolute; inset: 0;
-      width: 100% !important; height: 100% !important;
+      position:absolute; inset:0;
+      width:100% !important; height:100% !important;
     }
-
-    /* Dynamic UI overlay layer */
-    #dynamic-ui {
-      display: none;
-      position: fixed; inset: 0;
-      z-index: 10;
-      pointer-events: none;
-    }
-    #dynamic-ui.active { display: block; }
-
-    /* Brand header for Dynamic mode */
-    #dynamic-header {
-      position: absolute; top: 0; left: 0; right: 0;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 20px;
-      pointer-events: auto;
-    }
-    .dynamic-brand {
-      font-family: 'Playfair Display', serif;
-      font-size: 17px; font-weight: 700;
-      color: var(--gold); letter-spacing: 0.8px;
-    }
-    .dynamic-brand span { color: var(--text); font-weight: 300; }
-    #dynamic-menu-btn { display: none; }
-
-    /* Dish info card — sits above the minimized menu (130px) */
-    #dynamic-dish-info {
-      position: absolute;
-      bottom: 148px; left: 50%;
-      transform: translateX(-50%);
-      width: 92%; max-width: 360px;
-      background: var(--card-bg);
-      backdrop-filter: blur(24px) saturate(160%);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 20px 22px 16px;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
-      pointer-events: auto;
-    }
-    .dynamic-dish-top {
-      display: flex; align-items: center; gap: 14px;
-      margin-bottom: 10px;
-    }
-    #dynamic-dish-emoji {
-      font-size: 36px; flex-shrink: 0;
-    }
-    .dynamic-dish-meta { flex: 1; min-width: 0; }
-    #dynamic-dish-name {
-      font-size: 17px; font-weight: 700; color: var(--text);
-      line-height: 1.2; margin-bottom: 3px;
-    }
-    #dynamic-dish-price {
-      font-size: 16px; font-weight: 700; color: var(--gold);
-      font-family: 'Playfair Display', serif;
-    }
-    #dynamic-dish-desc {
-      font-size: 12px; color: var(--muted); line-height: 1.45;
-      margin-bottom: 14px;
-    }
-    .dynamic-dish-actions {
-      display: flex; gap: 10px;
-    }
-    #dynamic-view-ar-btn {
-      flex: 1;
-      display: flex; align-items: center; justify-content: center; gap: 8px;
-      background: var(--gold);
-      color: #0A0A0F;
-      border: none; border-radius: 14px;
-      padding: 13px 16px;
-      font-size: 13px; font-weight: 700;
-      font-family: 'Inter', sans-serif;
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-    #dynamic-view-ar-btn:active { transform: scale(0.97); }
-    #dynamic-add-cart-btn {
-      flex: 1;
-      display: none; align-items: center; justify-content: center; gap: 8px;
-      background: rgba(212,168,83,0.12);
-      color: var(--gold);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 13px 16px;
-      font-size: 13px; font-weight: 600;
-      font-family: 'Inter', sans-serif;
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-    #dynamic-add-cart-btn:active { transform: scale(0.97); }
-
-    /* Prev/Next navigation — above minimized menu */
-    #dynamic-nav {
-      position: absolute;
-      bottom: 110px; left: 50%;
-      transform: translateX(-50%);
-      display: flex; align-items: center; gap: 16px;
-      pointer-events: auto;
-    }
-    .dynamic-nav-btn {
-      width: 38px; height: 38px;
-      background: var(--card-bg);
-      backdrop-filter: blur(12px);
-      border: 1px solid var(--border);
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px; color: var(--text);
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-    .dynamic-nav-btn:active { transform: scale(0.93); }
-    #dynamic-dots {
-      display: flex; gap: 7px; align-items: center;
-    }
-    .nav-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: rgba(212,168,83,0.25);
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    .nav-dot.active {
-      background: var(--gold);
-      transform: scale(1.3);
-    }
-
-    /* Dynamic model loading */
-    #dynamic-model-loading {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 20;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.3s ease;
-    }
-    #dynamic-model-loading.visible { opacity: 1; }
-
-    /* Empty state */
-    #dynamic-empty {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center; color: var(--muted);
-      font-size: 14px; opacity: 0;
-      transition: opacity 0.4s ease;
-      pointer-events: none;
-    }
-    #dynamic-empty.visible { opacity: 1; }
-    #dynamic-empty .empty-icon { font-size: 48px; margin-bottom: 16px; }
-
-    /* No model hint — above info card */
-    #dynamic-no-model {
-      position: absolute; bottom: 340px; left: 50%;
-      transform: translateX(-50%);
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      padding: 8px 20px;
-      font-size: 12px; color: var(--muted);
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.3s ease;
-    }
-    #dynamic-no-model.visible { opacity: 1; }
-
-    /* Dynamic menu panel — three states: hidden / minimized / open */
-    #dynamic-menu-panel {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      z-index: 50;
-      /* default: fully hidden below screen */
-      transform: translateY(100%);
-      transition: transform 0.48s cubic-bezier(0.22, 1, 0.36, 1);
-      padding: 0 10px 16px;
-      pointer-events: auto;
-    }
-    /* minimized: peeks ~130px from the bottom showing handle + category pills */
-    #dynamic-menu-panel.minimized {
-      transform: translateY(calc(100% - 130px));
-    }
-    /* open: fully expanded */
-    #dynamic-menu-panel.open {
-      transform: translateY(0);
-    }
-    .dynamic-menu-card {
-      background: rgba(8, 8, 18, 0.92);
-      backdrop-filter: blur(30px) saturate(160%);
-      -webkit-backdrop-filter: blur(30px) saturate(160%);
-      border: 1px solid var(--border);
-      border-radius: 22px;
-      padding: 0 16px 16px;
-      box-shadow: 0 -8px 48px rgba(0,0,0,0.75);
-      max-height: 72vh;
-      overflow-y: auto;
-    }
-    .dynamic-menu-card::-webkit-scrollbar { display: none; }
-
-    /* Drag handle area — always tappable even when minimized */
-    #dynamic-menu-handle-area {
-      width: 100%; padding: 10px 0 6px;
-      display: flex; flex-direction: column; align-items: center; gap: 10px;
-      cursor: pointer;
-    }
-    .dynamic-handle-bar {
-      width: 38px; height: 4px; border-radius: 2px;
-      background: rgba(212,168,83,0.35);
-    }
-    .dynamic-menu-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding-bottom: 14px;
-    }
-    .dynamic-menu-header h3 {
-      font-family: 'Playfair Display', serif;
-      font-size: 19px; font-weight: 700; color: var(--text);
-    }
-    #dynamic-menu-close {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 50px;
-      padding: 5px 14px;
-      font-size: 12px; color: var(--muted);
-      cursor: pointer;
-    }
-    /* Dish grid inside menu scrolls freely */
-    #dynamic-dish-grid {
-      overflow-y: auto; max-height: 52vh;
-    }
-    #dynamic-dish-grid::-webkit-scrollbar { display: none; }
 
     /* ═══════════════════════════════════════════════
-       CART UI
+       DYNAMIC UI — OVERLAY LAYER
     ═══════════════════════════════════════════════ */
+    #dynamic-ui {
+      display:none; position:fixed; inset:0; z-index:10; pointer-events:none;
+    }
+    #dynamic-ui.active { display:block; }
 
-    /* Cart FAB */
+    /* Top brand strip */
+    #dynamic-header {
+      position:absolute; top:0; left:0; right:0;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:18px 22px; pointer-events:auto;
+    }
+    .dynamic-brand { font-family:'Playfair Display',serif; font-size:18px; font-weight:700; color:var(--gold); letter-spacing:0.6px; }
+    .dynamic-brand span { color:var(--text); font-weight:300; }
+    #dynamic-menu-btn { display:none; }
+
+    /* ── Model loading skeleton (inside dynamic) ── */
+    #dynamic-model-loading {
+      position:absolute; top:50%; left:50%;
+      transform:translate(-50%,-60%);
+      z-index:20; opacity:0; pointer-events:none; transition:opacity 0.3s ease;
+    }
+    #dynamic-model-loading.visible { opacity:1; }
+
+    /* ── Empty state ── */
+    #dynamic-empty {
+      position:absolute; top:40%; left:50%;
+      transform:translate(-50%,-50%);
+      text-align:center; color:var(--muted); font-size:14px;
+      opacity:0; pointer-events:none; transition:opacity 0.4s ease;
+    }
+    #dynamic-empty.visible { opacity:1; }
+    #dynamic-empty .empty-icon { font-size:56px; margin-bottom:18px; }
+
+    /* ═══════════════════════════════════════════════
+       DYNAMIC UI — DISH INFO CARD (neumorphic)
+    ═══════════════════════════════════════════════ */
+    #dynamic-dish-info {
+      position:absolute; bottom:152px; left:50%;
+      transform:translateX(-50%);
+      width:92%; max-width:380px;
+      background:var(--surface);
+      box-shadow: var(--ns-light), var(--ns-dark),
+                  inset 0 0 0 1px var(--border-sub);
+      border-radius:26px; padding:20px 20px 16px;
+      pointer-events:auto;
+    }
+    /* Top row: emoji circle + text */
+    .dyn-info-top {
+      display:flex; align-items:center; gap:16px; margin-bottom:10px;
+    }
+    .dyn-emoji-wrap {
+      width:64px; height:64px; flex-shrink:0; border-radius:20px;
+      background:var(--surface-2);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark),
+                  inset 0 0 0 1px rgba(212,168,83,0.12);
+      display:flex; align-items:center; justify-content:center;
+      font-size:34px;
+    }
+    .dyn-text-block { flex:1; min-width:0; }
+    #dynamic-dish-name {
+      font-size:17px; font-weight:800; color:var(--text);
+      line-height:1.2; margin-bottom:4px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    #dynamic-dish-price {
+      font-size:18px; font-weight:700; color:var(--gold);
+      font-family:'Playfair Display',serif;
+    }
+    #dynamic-dish-desc {
+      font-size:12px; color:var(--muted); line-height:1.5; margin-bottom:14px;
+    }
+    /* Action buttons */
+    .dyn-actions { display:flex; gap:10px; }
+    #dynamic-view-ar-btn {
+      flex:1; display:flex; align-items:center; justify-content:center; gap:8px;
+      background: linear-gradient(135deg,#c9983f,#e8c06a);
+      box-shadow: -3px -3px 8px rgba(255,255,255,0.05),
+                   4px  4px 12px rgba(0,0,0,0.65),
+                   inset 0 1px 0 rgba(255,255,255,0.22);
+      border:none; border-radius:14px; padding:13px 12px;
+      font-size:13px; font-weight:700; color:#0e0e1c;
+      font-family:'Inter',sans-serif; cursor:pointer; transition:all 0.15s ease;
+    }
+    #dynamic-view-ar-btn:active { box-shadow: var(--ni-light), var(--ni-dark); transform:scale(0.97); }
+    #dynamic-add-cart-btn {
+      flex:1; display:none; align-items:center; justify-content:center; gap:8px;
+      background:var(--surface-2);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark),
+                  inset 0 0 0 1px var(--border);
+      border:none; border-radius:14px; padding:13px 12px;
+      font-size:13px; font-weight:600; color:var(--gold);
+      font-family:'Inter',sans-serif; cursor:pointer; transition:all 0.15s ease;
+    }
+    #dynamic-add-cart-btn:active { box-shadow: var(--ni-light), var(--ni-dark); transform:scale(0.97); }
+
+    /* ═══════════════════════════════════════════════
+       DYNAMIC UI — PREV / NEXT / DOTS
+    ═══════════════════════════════════════════════ */
+    #dynamic-nav {
+      position:absolute; bottom:108px; left:50%;
+      transform:translateX(-50%);
+      display:flex; align-items:center; gap:18px; pointer-events:auto;
+    }
+    .dynamic-nav-btn {
+      width:40px; height:40px; border-radius:50%;
+      background:var(--surface);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark);
+      border:none; display:flex; align-items:center; justify-content:center;
+      font-size:20px; color:var(--text); cursor:pointer; transition:all 0.15s ease;
+    }
+    .dynamic-nav-btn:active { box-shadow: var(--ni-light), var(--ni-dark); }
+    #dynamic-dots { display:flex; gap:8px; align-items:center; }
+    .nav-dot {
+      width:7px; height:7px; border-radius:50%;
+      background:rgba(212,168,83,0.2); cursor:pointer; transition:all 0.2s ease;
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark);
+    }
+    .nav-dot.active { background:var(--gold); transform:scale(1.35); }
+
+    /* ═══════════════════════════════════════════════
+       DYNAMIC UI — BOTTOM MENU PANEL (neumorphic)
+       States: (no class) = hidden | .minimized = peek | .open = full
+    ═══════════════════════════════════════════════ */
+    #dynamic-menu-panel {
+      position:fixed; bottom:0; left:0; right:0; z-index:50;
+      transform:translateY(100%);
+      transition:transform 0.48s cubic-bezier(0.22,1,0.36,1);
+      padding:0 10px 18px; pointer-events:auto;
+    }
+    #dynamic-menu-panel.minimized { transform:translateY(calc(100% - 132px)); }
+    #dynamic-menu-panel.open      { transform:translateY(0); }
+
+    .dynamic-menu-card {
+      background:rgba(13,13,28,0.94);
+      backdrop-filter:blur(32px) saturate(180%);
+      -webkit-backdrop-filter:blur(32px) saturate(180%);
+      box-shadow: -6px -6px 20px rgba(255,255,255,0.035),
+                   0 -4px 40px rgba(0,0,0,0.8),
+                  inset 0 0 0 1px rgba(255,255,255,0.06);
+      border-radius:26px; padding:0 16px 16px;
+      max-height:72vh; overflow:hidden;
+    }
+
+    /* Handle + header */
+    #dynamic-menu-handle-area {
+      width:100%; padding:12px 0 8px;
+      display:flex; flex-direction:column; align-items:center; gap:12px;
+      cursor:pointer;
+    }
+    .dynamic-handle-bar {
+      width:36px; height:4px; border-radius:2px;
+      background:rgba(212,168,83,0.3);
+    }
+    .dynamic-menu-header {
+      display:flex; align-items:center; justify-content:space-between;
+      width:100%; margin:0;
+    }
+    .dynamic-menu-header h3 {
+      font-family:'Playfair Display',serif;
+      font-size:18px; font-weight:700; color:var(--text);
+    }
+    #dynamic-menu-close {
+      background:var(--surface-2);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark);
+      border:none; border-radius:50px;
+      padding:5px 16px; font-size:12px; font-weight:500;
+      color:var(--muted); cursor:pointer;
+    }
+
+    /* Scrollable dish grid inside menu */
+    #dynamic-dish-grid {
+      overflow-y:auto; max-height:50vh; margin-top:2px;
+    }
+    #dynamic-dish-grid::-webkit-scrollbar { display:none; }
+
+    /* ═══════════════════════════════════════════════
+       CART FAB
+    ═══════════════════════════════════════════════ */
     #cart-fab {
-      position: fixed; bottom: 28px; right: 20px;
-      z-index: 45;
-      width: 54px; height: 54px;
-      background: var(--gold);
-      border: none; border-radius: 50%;
-      display: none; align-items: center; justify-content: center;
-      font-size: 22px;
-      cursor: pointer;
-      box-shadow: 0 4px 20px rgba(212,168,83,0.45);
-      transition: transform 0.15s ease;
+      position:fixed; bottom:26px; right:20px; z-index:45;
+      width:56px; height:56px; border-radius:50%; border:none;
+      background:linear-gradient(135deg,#c9983f,#e8c06a);
+      box-shadow: -4px -4px 10px rgba(255,255,255,0.05),
+                   6px  6px 18px rgba(0,0,0,0.7),
+                  inset 0 1px 0 rgba(255,255,255,0.3);
+      display:none; align-items:center; justify-content:center;
+      font-size:22px; cursor:pointer;
+      transition:transform 0.14s ease;
     }
-    #cart-fab.visible { display: flex; }
-    #cart-fab:active { transform: scale(0.93); }
+    #cart-fab.visible { display:flex; }
+    #cart-fab:active { transform:scale(0.92); box-shadow: var(--ni-light), var(--ni-dark); }
     #cart-badge {
-      position: absolute; top: -4px; right: -4px;
-      min-width: 20px; height: 20px;
-      background: #ff4444; color: #fff;
-      border-radius: 10px;
-      font-size: 11px; font-weight: 700;
-      display: none; align-items: center; justify-content: center;
-      padding: 0 5px;
+      position:absolute; top:-4px; right:-4px;
+      min-width:20px; height:20px; border-radius:10px;
+      background:#e85454; color:#fff;
+      font-size:11px; font-weight:700;
+      display:none; align-items:center; justify-content:center; padding:0 5px;
     }
 
-    /* Cart toast */
+    /* ═══════════════════════════════════════════════
+       CART TOAST
+    ═══════════════════════════════════════════════ */
     #cart-toast {
-      position: fixed; bottom: 100px; left: 50%;
-      transform: translateX(-50%) translateY(10px);
-      z-index: 80;
-      background: rgba(20,20,30,0.95);
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      padding: 10px 22px;
-      font-size: 13px; font-weight: 500; color: var(--text);
-      opacity: 0;
-      transition: all 0.3s ease;
-      pointer-events: none;
-      white-space: nowrap;
+      position:fixed; bottom:96px; left:50%;
+      transform:translateX(-50%) translateY(10px);
+      z-index:80; background:var(--surface);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark),
+                  inset 0 0 0 1px var(--border-sub);
+      border-radius:50px; padding:10px 24px;
+      font-size:13px; font-weight:500; color:var(--text);
+      opacity:0; transition:all 0.3s ease; pointer-events:none; white-space:nowrap;
     }
-    #cart-toast.visible {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
+    #cart-toast.visible { opacity:1; transform:translateX(-50%) translateY(0); }
 
-    /* Cart panel */
+    /* ═══════════════════════════════════════════════
+       CART PANEL
+    ═══════════════════════════════════════════════ */
     #cart-panel {
-      position: fixed; inset: 0;
-      z-index: 100;
-      background: rgba(0,0,0,0.6);
-      backdrop-filter: blur(4px);
-      display: flex; align-items: flex-end;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.3s ease;
+      position:fixed; inset:0; z-index:100;
+      background:rgba(0,0,0,0.55); backdrop-filter:blur(5px);
+      display:flex; align-items:flex-end;
+      opacity:0; pointer-events:none; transition:opacity 0.3s ease;
     }
-    #cart-panel.visible { opacity: 1; pointer-events: auto; }
+    #cart-panel.visible { opacity:1; pointer-events:auto; }
     .cart-sheet {
-      width: 100%;
-      background: #0f0f1a;
-      border-top: 1px solid var(--border);
-      border-radius: 24px 24px 0 0;
-      padding: 24px 20px 36px;
-      max-height: 80vh;
-      overflow-y: auto;
-      transform: translateY(100%);
-      transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+      width:100%; background:var(--surface);
+      box-shadow: -6px -6px 24px rgba(255,255,255,0.03), 0 -4px 48px rgba(0,0,0,0.8);
+      border-radius:28px 28px 0 0; padding:26px 20px 40px;
+      max-height:80vh; overflow-y:auto;
+      transform:translateY(100%);
+      transition:transform 0.42s cubic-bezier(0.22,1,0.36,1);
     }
-    #cart-panel.visible .cart-sheet { transform: translateY(0); }
-    .cart-sheet::-webkit-scrollbar { display: none; }
-    .cart-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 20px;
-    }
-    .cart-header h3 {
-      font-family: 'Playfair Display', serif;
-      font-size: 22px; font-weight: 700; color: var(--text);
-    }
+    #cart-panel.visible .cart-sheet { transform:translateY(0); }
+    .cart-sheet::-webkit-scrollbar { display:none; }
+    .cart-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; }
+    .cart-header h3 { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:var(--text); }
     #cart-panel-close {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 50px;
-      padding: 6px 16px;
-      font-size: 12px; color: var(--muted);
-      cursor: pointer;
+      background:var(--surface-2); box-shadow: var(--ns-sm-light), var(--ns-sm-dark);
+      border:none; border-radius:50px; padding:6px 16px;
+      font-size:12px; font-weight:500; color:var(--muted); cursor:pointer;
     }
-    .cart-empty {
-      text-align: center; color: var(--muted);
-      font-size: 14px; padding: 30px 0;
-    }
+    .cart-empty { text-align:center; color:var(--muted); font-size:14px; padding:36px 0; }
     .cart-item-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 14px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display:flex; align-items:center; gap:12px;
+      padding:14px 0; border-bottom:1px solid rgba(255,255,255,0.05);
     }
-    .cart-item-emoji { font-size: 28px; flex-shrink: 0; }
-    .cart-item-info { flex: 1; min-width: 0; }
-    .cart-item-name { font-size: 14px; font-weight: 600; color: var(--text); }
-    .cart-item-price { font-size: 13px; color: var(--gold); font-family: 'Playfair Display', serif; margin-top: 2px; }
+    .cart-item-emoji { font-size:30px; flex-shrink:0; }
+    .cart-item-info { flex:1; min-width:0; }
+    .cart-item-name { font-size:14px; font-weight:600; color:var(--text); }
+    .cart-item-price { font-size:13px; color:var(--gold); font-family:'Playfair Display',serif; margin-top:2px; }
     .cart-qty-control {
-      display: flex; align-items: center; gap: 10px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      padding: 5px 12px;
+      display:flex; align-items:center; gap:10px;
+      background:var(--surface-2); box-shadow: var(--ni-light), var(--ni-dark);
+      border-radius:50px; padding:5px 12px;
     }
-    .qty-btn {
-      background: none; border: none;
-      font-size: 18px; color: var(--gold);
-      cursor: pointer; line-height: 1;
-      padding: 0 2px;
-    }
-    .qty-val { font-size: 14px; font-weight: 600; color: var(--text); min-width: 18px; text-align: center; }
-    .cart-footer {
-      margin-top: 20px;
-    }
-    .cart-total-row {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 16px;
-    }
-    .cart-total-label { font-size: 14px; color: var(--muted); }
-    #cart-total-amount { font-size: 20px; font-weight: 700; color: var(--text); font-family: 'Playfair Display', serif; }
+    .qty-btn { background:none; border:none; font-size:18px; color:var(--gold); cursor:pointer; line-height:1; padding:0 2px; }
+    .qty-val { font-size:14px; font-weight:700; color:var(--text); min-width:18px; text-align:center; }
+    .cart-footer { margin-top:22px; }
+    .cart-total-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+    .cart-total-label { font-size:14px; color:var(--muted); }
+    #cart-total-amount { font-size:22px; font-weight:800; color:var(--text); font-family:'Playfair Display',serif; }
     #cart-checkout-btn {
-      width: 100%;
-      background: var(--gold); color: #0A0A0F;
-      border: none; border-radius: 16px;
-      padding: 16px;
-      font-size: 15px; font-weight: 700;
-      font-family: 'Inter', sans-serif;
-      cursor: pointer;
-      transition: all 0.15s ease;
+      width:100%; border:none; border-radius:18px; padding:17px;
+      background:linear-gradient(135deg,#c9983f,#e8c06a);
+      box-shadow: -4px -4px 10px rgba(255,255,255,0.05),
+                   5px  5px 14px rgba(0,0,0,0.65),
+                  inset 0 1px 0 rgba(255,255,255,0.25);
+      font-size:15px; font-weight:700; color:#0e0e1c; font-family:'Inter',sans-serif; cursor:pointer;
     }
-    #cart-checkout-btn:active { transform: scale(0.98); }
+    #cart-checkout-btn:active { box-shadow: var(--ni-light), var(--ni-dark); transform:scale(0.98); }
 
-    /* Checkout panel */
+    /* ═══════════════════════════════════════════════
+       CHECKOUT PANEL
+    ═══════════════════════════════════════════════ */
     #checkout-panel {
-      position: fixed; inset: 0;
-      z-index: 110;
-      background: #0A0A0F;
-      overflow-y: auto;
-      transform: translateX(100%);
-      transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+      position:fixed; inset:0; z-index:110;
+      background: var(--bg);
+      overflow-y:auto; transform:translateX(100%);
+      transition:transform 0.42s cubic-bezier(0.22,1,0.36,1);
     }
-    #checkout-panel.visible { transform: translateX(0); }
-    .checkout-inner {
-      padding: 28px 22px 48px;
-      min-height: 100%;
-    }
+    #checkout-panel.visible { transform:translateX(0); }
+    .checkout-inner { padding:32px 22px 56px; min-height:100%; }
     .checkout-back {
-      display: flex; align-items: center; gap: 8px;
-      background: none; border: none;
-      color: var(--muted); font-size: 14px;
-      cursor: pointer; margin-bottom: 24px;
-      padding: 0;
+      display:flex; align-items:center; gap:8px;
+      background:none; border:none; color:var(--muted); font-size:14px; font-weight:500;
+      cursor:pointer; margin-bottom:28px; padding:0; font-family:'Inter',sans-serif;
     }
-    .checkout-title {
-      font-family: 'Playfair Display', serif;
-      font-size: 26px; font-weight: 700; color: var(--text);
-      margin-bottom: 6px;
-    }
-    .checkout-subtitle { font-size: 12px; color: var(--muted); margin-bottom: 28px; }
-    .checkout-field {
-      margin-bottom: 16px;
-    }
+    .checkout-back:hover { color:var(--text); }
+    .checkout-title { font-family:'Playfair Display',serif; font-size:28px; font-weight:800; color:var(--text); margin-bottom:6px; }
+    .checkout-subtitle { font-size:13px; color:var(--muted); margin-bottom:30px; }
+    .checkout-field { margin-bottom:18px; }
     .checkout-field label {
-      display: block; font-size: 11px; font-weight: 600;
-      color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase;
-      margin-bottom: 7px;
+      display:block; font-size:11px; font-weight:600; letter-spacing:0.9px;
+      text-transform:uppercase; color:var(--muted); margin-bottom:8px;
     }
     .checkout-field input,
     .checkout-field select {
-      width: 100%;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 14px;
-      padding: 14px 16px;
-      font-size: 14px; color: var(--text);
-      font-family: 'Inter', sans-serif;
-      outline: none;
-      transition: border-color 0.2s ease;
-      -webkit-appearance: none;
-      appearance: none;
+      width:100%;
+      background:var(--surface);
+      box-shadow: var(--ni-light), var(--ni-dark);
+      border:1px solid transparent; border-radius:16px;
+      padding:15px 18px; font-size:14px; font-weight:500;
+      color:var(--text); font-family:'Inter',sans-serif;
+      outline:none; transition:border-color 0.2s ease;
+      -webkit-appearance:none; appearance:none;
     }
     .checkout-field input:focus,
-    .checkout-field select:focus {
-      border-color: var(--gold);
-    }
-    .checkout-field select option { background: #0f0f1a; color: var(--text); }
+    .checkout-field select:focus { border-color:var(--gold); }
+    .checkout-field select option { background:#131327; color:var(--text); }
     .checkout-total-box {
-      background: rgba(212,168,83,0.06);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 16px 18px;
-      display: flex; justify-content: space-between; align-items: center;
-      margin: 24px 0;
+      background:var(--surface);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark),
+                  inset 0 0 0 1px var(--border);
+      border-radius:18px; padding:16px 20px;
+      display:flex; justify-content:space-between; align-items:center;
+      margin:26px 0;
     }
-    .checkout-total-label { font-size: 13px; color: var(--muted); }
-    #checkout-total-display { font-size: 22px; font-weight: 700; color: var(--gold); font-family: 'Playfair Display', serif; }
-    #checkout-form-error {
-      display: none; color: #ff6b6b;
-      font-size: 13px; margin-bottom: 12px;
-    }
+    .checkout-total-label { font-size:13px; color:var(--muted); }
+    #checkout-total-display { font-size:24px; font-weight:800; color:var(--gold); font-family:'Playfair Display',serif; }
+    #checkout-form-error { display:none; color:#e85454; font-size:13px; margin-bottom:12px; font-weight:500; }
     #checkout-submit-btn {
-      width: 100%;
-      background: var(--gold); color: #0A0A0F;
-      border: none; border-radius: 16px;
-      padding: 17px;
-      font-size: 15px; font-weight: 700;
-      font-family: 'Inter', sans-serif;
-      cursor: pointer;
-      transition: all 0.15s ease;
+      width:100%; border:none; border-radius:18px; padding:18px;
+      background:linear-gradient(135deg,#c9983f,#e8c06a);
+      box-shadow: -4px -4px 10px rgba(255,255,255,0.05),
+                   5px  5px 14px rgba(0,0,0,0.65),
+                  inset 0 1px 0 rgba(255,255,255,0.25);
+      font-size:15px; font-weight:700; color:#0e0e1c; font-family:'Inter',sans-serif; cursor:pointer;
     }
-    #checkout-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    #checkout-submit-btn:active:not(:disabled) { transform: scale(0.98); }
+    #checkout-submit-btn:disabled { opacity:0.5; cursor:not-allowed; }
+    #checkout-submit-btn:active:not(:disabled) { box-shadow: var(--ni-light), var(--ni-dark); transform:scale(0.98); }
 
-    /* Order success screen */
-    #order-success-screen {
-      position: fixed; inset: 0;
-      z-index: 120;
-      background: #0A0A0F;
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column; text-align: center;
-      padding: 40px 32px;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.4s ease;
+    /* ═══════════════════════════════════════════════
+       ORDER SUCCESS / ERROR SCREENS
+    ═══════════════════════════════════════════════ */
+    #order-success-screen,
+    #order-error-screen {
+      position:fixed; inset:0; z-index:120;
+      background: radial-gradient(ellipse 120% 80% at 50% -5%, #1e1040 0%, #0e0e1c 55%);
+      display:flex; align-items:center; justify-content:center;
+      flex-direction:column; text-align:center; padding:48px 36px;
+      opacity:0; pointer-events:none; transition:opacity 0.4s ease;
     }
-    #order-success-screen.visible { opacity: 1; pointer-events: auto; }
-    .success-icon { font-size: 72px; margin-bottom: 24px; }
-    .success-title {
-      font-family: 'Playfair Display', serif;
-      font-size: 30px; font-weight: 700; color: var(--text);
-      margin-bottom: 10px;
+    #order-success-screen.visible,
+    #order-error-screen.visible { opacity:1; pointer-events:auto; }
+
+    .result-icon-wrap {
+      width:100px; height:100px; border-radius:50%; margin-bottom:28px;
+      background:var(--surface);
+      box-shadow: var(--ns-light), var(--ns-dark);
+      display:flex; align-items:center; justify-content:center; font-size:50px;
     }
-    .success-subtitle { font-size: 14px; color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
+    .result-title { font-family:'Playfair Display',serif; font-size:30px; font-weight:800; color:var(--text); margin-bottom:10px; }
+    .result-sub { font-size:14px; color:var(--muted); line-height:1.6; margin-bottom:10px; }
     #order-success-num {
-      font-size: 13px; font-weight: 600;
-      color: var(--gold);
-      background: rgba(212,168,83,0.08);
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      padding: 6px 20px;
-      margin: 16px 0 32px;
-      display: inline-block;
+      font-size:13px; font-weight:600; color:var(--gold);
+      background:var(--surface);
+      box-shadow: var(--ns-sm-light), var(--ns-sm-dark);
+      border-radius:50px; padding:8px 24px; margin:14px 0 36px; display:inline-block;
+    }
+    #order-done-btn, #order-retry-btn {
+      border:none; border-radius:50px; padding:16px 56px;
+      font-size:15px; font-weight:700; font-family:'Inter',sans-serif; cursor:pointer;
     }
     #order-done-btn {
-      background: var(--gold); color: #0A0A0F;
-      border: none; border-radius: 50px;
-      padding: 16px 56px;
-      font-size: 15px; font-weight: 700;
-      font-family: 'Inter', sans-serif;
-      cursor: pointer;
+      background:linear-gradient(135deg,#c9983f,#e8c06a);
+      box-shadow: -4px -4px 10px rgba(255,255,255,0.05),
+                   5px  5px 14px rgba(0,0,0,0.65),
+                  inset 0 1px 0 rgba(255,255,255,0.25);
+      color:#0e0e1c;
     }
-
-    /* Order error screen */
-    #order-error-screen {
-      position: fixed; inset: 0;
-      z-index: 120;
-      background: #0A0A0F;
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column; text-align: center;
-      padding: 40px 32px;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.4s ease;
-    }
-    #order-error-screen.visible { opacity: 1; pointer-events: auto; }
-    .error-icon { font-size: 64px; margin-bottom: 24px; }
-    .error-title {
-      font-family: 'Playfair Display', serif;
-      font-size: 26px; font-weight: 700; color: var(--text);
-      margin-bottom: 10px;
-    }
-    .error-subtitle { font-size: 14px; color: var(--muted); margin-bottom: 32px; line-height: 1.5; }
     #order-retry-btn {
-      background: rgba(212,168,83,0.1);
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      padding: 16px 48px;
-      font-size: 15px; font-weight: 600;
-      color: var(--gold);
-      font-family: 'Inter', sans-serif;
-      cursor: pointer;
+      background:var(--surface);
+      box-shadow: var(--ns-light), var(--ns-dark);
+      color:var(--gold);
     }
   </style>
 </head>
 <body>
 
-  <!-- Splash Screen -->
+  <!-- ═══ SPLASH ═══ -->
   <div id="splash-screen">
     <div class="splash-inner">
+      <div class="splash-plate">🍽</div>
       <div class="splash-logo">Paladeium<span> Lens</span></div>
-      <div class="splash-tagline">Interactive AR Menu</div>
+      <div class="splash-tagline">Immersive AR Restaurant Menu</div>
       <button id="open-menu-btn">Open Menu</button>
     </div>
   </div>
 
+  <!-- ═══ AR CANVAS ═══ -->
   <div id="ar-container"></div>
 
-  <!-- Top bar -->
+  <!-- ═══ AR — STATUS BAR ═══ -->
   <div id="status-bar">
     <div class="brand">Paladeium<span> Lens</span></div>
     <div id="anchor-status">
@@ -1051,9 +814,7 @@
     </div>
   </div>
 
-
-
-  <!-- No-anchor prompt -->
+  <!-- ═══ AR — NO ANCHOR ═══ -->
   <div id="no-anchor-msg">
     <div class="icon">
       <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
@@ -1063,23 +824,23 @@
         <line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>
       </svg>
     </div>
-    <p>Point at the <strong>menu card</strong> first so the dish appears in AR</p>
+    <p>Point at the <strong>menu card</strong><br>so the dish appears in AR</p>
   </div>
 
-  <!-- Scanning ring — shows AR detection progress, centered on screen -->
+  <!-- ═══ AR — SCAN RING ═══ -->
   <div id="scan-ring">
     <div class="scan-ring-track"></div>
     <div class="scan-ring-fill" id="scan-ring-fill"></div>
     <div class="scan-ring-icon">📍</div>
   </div>
 
-  <!-- Surface scanning status hint -->
+  <!-- ═══ AR — SURFACE HINT ═══ -->
   <div id="surface-tap-hint">
     <div class="tap-pulse"></div>
     <span id="surface-hint-text">Scanning surface…</span>
   </div>
 
-  <!-- Skeleton Loading -->
+  <!-- ═══ AR — SKELETON LOADING ═══ -->
   <div id="model-loading">
     <div class="skeleton-card">
       <div class="skeleton-image"></div>
@@ -1088,13 +849,13 @@
     </div>
   </div>
 
-  <!-- Tutorial Overlay -->
+  <!-- ═══ AR — TUTORIAL ═══ -->
   <div id="tutorial-overlay">
     <div class="tutorial-hand">👆</div>
     <div class="tutorial-text">Swipe left or right to switch dishes</div>
   </div>
 
-  <!-- Floating Info Card -->
+  <!-- ═══ AR — INFO CARD ═══ -->
   <div id="info-card">
     <div class="info-header">
       <div class="info-name">Dish Name</div>
@@ -1103,12 +864,12 @@
     <div class="info-desc">Description</div>
   </div>
 
-  <!-- Drag / pinch hint -->
+  <!-- ═══ AR — SWIPE HINT ═══ -->
   <div id="ar-hint">
-    <span>Swipe left/right to change dish</span>
+    <span>Swipe left / right to switch dishes</span>
   </div>
 
-  <!-- Floating bottom menu panel -->
+  <!-- ═══ AR — MENU PANEL ═══ -->
   <div id="menu-panel">
     <div class="menu-handle-container" id="menu-toggle">
       <div class="menu-handle"></div>
@@ -1125,18 +886,16 @@
     </div>
   </div>
 
-  <!-- ═══ DYNAMIC UI MODE ═══ -->
-
-  <!-- Three.js canvas for Dynamic mode -->
+  <!-- ═══ DYNAMIC UI — CANVAS ═══ -->
   <div id="dynamic-container"></div>
 
-  <!-- Dynamic overlay UI (info card, nav, buttons) -->
+  <!-- ═══ DYNAMIC UI — OVERLAY ═══ -->
   <div id="dynamic-ui">
     <div id="dynamic-header">
       <div class="dynamic-brand">Paladeium<span> Lens</span></div>
     </div>
 
-    <!-- 3D model loading skeleton -->
+    <!-- Skeleton while model loads -->
     <div id="dynamic-model-loading">
       <div class="skeleton-card">
         <div class="skeleton-image"></div>
@@ -1145,32 +904,31 @@
       </div>
     </div>
 
-    <!-- Empty state (no AR dishes) -->
+    <!-- Empty state -->
     <div id="dynamic-empty">
       <div class="empty-icon">🍽</div>
-      <p>No 3D dishes available yet.<br>Ask the restaurant to enable AR models.</p>
+      <p>No 3D dishes yet.<br>Enable AR models in the dashboard.</p>
     </div>
-
-    <!-- No model hint -->
-    <div id="dynamic-no-model">This dish doesn't have a 3D model</div>
 
     <!-- Dish info card -->
     <div id="dynamic-dish-info">
-      <div class="dynamic-dish-top">
-        <span id="dynamic-dish-emoji">🍽</span>
-        <div class="dynamic-dish-meta">
+      <div class="dyn-info-top">
+        <div class="dyn-emoji-wrap">
+          <span id="dynamic-dish-emoji">🍽</span>
+        </div>
+        <div class="dyn-text-block">
           <div id="dynamic-dish-name">Loading…</div>
           <div id="dynamic-dish-price">₹0</div>
         </div>
       </div>
       <div id="dynamic-dish-desc"></div>
-      <div class="dynamic-dish-actions">
+      <div class="dyn-actions">
         <button id="dynamic-view-ar-btn">🪄 View in Table</button>
         <button id="dynamic-add-cart-btn">🛒 Add to Cart</button>
       </div>
     </div>
 
-    <!-- Dish navigation (prev / dots / next) -->
+    <!-- Prev / dots / next -->
     <div id="dynamic-nav">
       <button class="dynamic-nav-btn" id="dynamic-prev-btn">‹</button>
       <div id="dynamic-dots"></div>
@@ -1178,13 +936,12 @@
     </div>
   </div>
 
-  <!-- Dynamic menu panel (bottom sheet — minimized by default, all dishes) -->
+  <!-- ═══ DYNAMIC UI — BOTTOM MENU ═══ -->
   <div id="dynamic-menu-panel">
     <div class="dynamic-menu-card">
-      <!-- Tappable handle area expands/collapses the panel -->
       <div id="dynamic-menu-handle-area">
         <div class="dynamic-handle-bar"></div>
-        <div class="dynamic-menu-header" style="width:100%;margin:0;">
+        <div class="dynamic-menu-header">
           <h3>Full Menu</h3>
           <button id="dynamic-menu-close">Done</button>
         </div>
@@ -1196,18 +953,13 @@
     </div>
   </div>
 
-  <!-- ═══ CART UI ═══ -->
+  <!-- ═══ CART FAB ═══ -->
+  <button id="cart-fab">🛒<span id="cart-badge"></span></button>
 
-  <!-- Floating cart button -->
-  <button id="cart-fab">
-    🛒
-    <span id="cart-badge"></span>
-  </button>
-
-  <!-- Added-to-cart toast -->
+  <!-- ═══ CART TOAST ═══ -->
   <div id="cart-toast"></div>
 
-  <!-- Cart panel -->
+  <!-- ═══ CART PANEL ═══ -->
   <div id="cart-panel">
     <div class="cart-sheet">
       <div class="cart-header">
@@ -1230,8 +982,7 @@
     <div class="checkout-inner">
       <button class="checkout-back" id="checkout-back-btn">← Back to Cart</button>
       <div class="checkout-title">Your Details</div>
-      <div class="checkout-subtitle">We need a few details to process your order</div>
-
+      <div class="checkout-subtitle">A few details to complete your order</div>
       <form id="checkout-form" novalidate>
         <div class="checkout-field">
           <label>Full Name</label>
@@ -1242,8 +993,8 @@
           <input type="tel" name="cust-phone" placeholder="e.g. 9876543210" autocomplete="tel" />
         </div>
         <div class="checkout-field">
-          <label>Table / Address</label>
-          <input type="text" name="cust-address" placeholder="e.g. Table 4 or delivery address" />
+          <label>Table / Delivery Address</label>
+          <input type="text" name="cust-address" placeholder="e.g. Table 4 or your address" />
         </div>
         <div class="checkout-field">
           <label>Gender</label>
@@ -1259,12 +1010,10 @@
           <label>Age</label>
           <input type="number" name="cust-age" placeholder="e.g. 25" min="1" max="120" />
         </div>
-
         <div class="checkout-total-box">
           <span class="checkout-total-label">Order Total</span>
           <span id="checkout-total-display">₹0</span>
         </div>
-
         <div id="checkout-form-error"></div>
         <button type="submit" id="checkout-submit-btn">Place Order</button>
       </form>
@@ -1273,51 +1022,53 @@
 
   <!-- ═══ ORDER SUCCESS ═══ -->
   <div id="order-success-screen">
-    <div class="success-icon">✅</div>
-    <div class="success-title">Order Placed!</div>
-    <div class="success-subtitle">Your order has been received.<br>We'll have it ready for you shortly.</div>
+    <div class="result-icon-wrap">✅</div>
+    <div class="result-title">Order Placed!</div>
+    <div class="result-sub">Your order has been received.<br>We'll have it ready shortly.</div>
     <div id="order-success-num">#00000</div>
     <button id="order-done-btn">Done</button>
   </div>
 
   <!-- ═══ ORDER ERROR ═══ -->
   <div id="order-error-screen">
-    <div class="error-icon">❌</div>
-    <div class="error-title">Order Failed</div>
-    <div class="error-subtitle">Something went wrong while placing your order.<br>Please try again.</div>
-    <button id="order-retry-btn">Try Again</button>
+    <div class="result-icon-wrap">❌</div>
+    <div class="result-title">Order Failed</div>
+    <div class="result-sub">Something went wrong.<br>Please try again.</div>
+    <button id="order-retry-btn" style="margin-top:32px">Try Again</button>
   </div>
 
+  <!-- ═══ SCRIPT ═══ -->
   <script src="./config.js"></script>
   <script type="module">
-    import { ARSessionManager }   from './js/ARSessionManager.js';
-    import { DynamicUIManager }   from './js/DynamicUIManager.js';
-    import { CartManager }        from './js/CartManager.js';
-    import { State, setState }    from './js/StateManager.js';
+    import { ARSessionManager } from './js/ARSessionManager.js';
+    import { DynamicUIManager } from './js/DynamicUIManager.js';
+    import { CartManager }      from './js/CartManager.js';
+    import { State, setState }  from './js/StateManager.js';
 
     const DASHBOARD_API = window.__PALADEIUM_API__ || 'http://localhost:3000';
 
-    // Default fallback menu (AR-capable item only)
+    // Fallback menu used when no ?r=slug is provided (no API call made).
+    // Models require a real restaurant context, so hasAR is false here.
     let MENU = [
-      { id:'burger', name:'Wagyu Smash Burger', desc:'Double patty, aged cheddar, truffle aioli', price:'₹649', emoji:'🍔', cat:'mains', model:'models/the-grand-spice/burger.glb', hasAR:true },
-      { id:'pizza',  name:'Margherita Classico', desc:'San Marzano tomato, buffalo mozzarella',   price:'₹549', emoji:'🍕', cat:'mains',    model:null, hasAR:false },
-      { id:'pasta',  name:'Cacio e Pepe',        desc:'Tonnarelli, romano, tellicherry pepper',   price:'₹479', emoji:'🍝', cat:'mains',    model:null, hasAR:false },
-      { id:'salad',  name:'Caesar Deluxe',       desc:'Romaine, house dressing, parmesan crisp',  price:'₹329', emoji:'🥗', cat:'starters', model:null, hasAR:false },
+      { id:'burger',   name:'Wagyu Smash Burger',     desc:'Double patty, aged cheddar, truffle aioli',                        price:'₹649', emoji:'🍔', cat:'mains',    model:null, modelScale:1.0, hasAR:false },
+      { id:'pizza',    name:'Margherita Classico',    desc:'San Marzano tomato, buffalo mozzarella',                           price:'₹549', emoji:'🍕', cat:'mains',    model:null, modelScale:1.0, hasAR:false },
+      { id:'pasta',    name:'Pasta Meatball Delight', desc:'Tonnarelli with slow-cooked meatballs in rich tomato basil sauce', price:'₹479', emoji:'🍝', cat:'mains',    model:null, modelScale:1.0, hasAR:false },
+      { id:'sandwich', name:'Signature Sandwich',     desc:'Grilled sourdough, roasted peppers, aged cheddar, herb aioli',    price:'₹329', emoji:'🥪', cat:'starters', model:null, modelScale:1.0, hasAR:false },
+      { id:'mojito',   name:'Virgin Mojito',           desc:'Fresh lime, mint, soda, brown sugar',                             price:'₹199', emoji:'🍹', cat:'drinks',   model:null, modelScale:1.0, hasAR:false },
+      { id:'pastry',   name:'Flaky Pastry Delight',   desc:'Warm Valrhona centre, vanilla bean ice cream',                    price:'₹299', emoji:'🥐', cat:'desserts', model:null, modelScale:1.0, hasAR:false },
     ];
-    let CATEGORIES       = [];
-    let UI_TYPE          = 'ar';      // 'ar' | 'dynamic'
-    let PAYMENT_ENABLED  = false;
-    let cartManager      = null;
+    let CATEGORIES      = [];
+    let UI_TYPE         = 'ar';
+    let PAYMENT_ENABLED = false;
+    let cartManager     = null;
 
-    // ── Fetch menu data from API ──────────────────────────────
+    // ── Fetch & apply menu ────────────────────────────────────
 
     async function fetchMenu() {
       const slug = new URLSearchParams(location.search).get('r');
       setState({ restaurantSlug: slug });
-      if (!slug) {
-        _applyMenu();
-        return;
-      }
+      if (!slug) { _applyMenu(); return; }
+
       try {
         const res = await fetch(`${DASHBOARD_API}/api/restaurants/${slug}/menu`);
         if (res.ok) {
@@ -1326,11 +1077,12 @@
             MENU = data.menu.map(item => ({
               id:         item.id,
               name:       item.name,
-              desc:       item.description ?? item.desc ?? '',
+              desc:       item.desc ?? '',
               price:      typeof item.price === 'number' ? '₹' + item.price : (item.price ?? ''),
-              emoji:      item.emoji ?? '',
+              emoji:      item.emoji ?? '🍽',
               cat:        (item.cat ?? 'other').toLowerCase(),
-              model:      item.model ?? null,
+              // Resolve model URL: absolute stays as-is, relative is served from lens root
+              model:      item.model ? _resolveModel(item.model) : null,
               modelScale: item.modelScale ?? 1.0,
               hasAR:      item.hasAR ?? false,
             }));
@@ -1338,46 +1090,48 @@
           CATEGORIES      = data.categories ?? [];
           UI_TYPE         = data.restaurant?.uiType         ?? 'ar';
           PAYMENT_ENABLED = data.restaurant?.paymentEnabled ?? false;
-          window._arOverlayEnabled        = data.restaurant?.arOverlayEnabled        ?? false;
-          window._markerDetectionEnabled  = data.restaurant?.markerDetectionEnabled  ?? true;
+          window._arOverlayEnabled       = data.restaurant?.arOverlayEnabled       ?? false;
+          window._markerDetectionEnabled = data.restaurant?.markerDetectionEnabled ?? true;
         }
-      } catch {
-        console.warn('[Paladeium] API unavailable — using default menu');
+      } catch (e) {
+        console.warn('[Paladeium] API unavailable — using default menu', e);
       }
       _applyMenu();
     }
 
+    function _resolveModel(url) {
+      if (!url) return null;
+      // Already absolute — Vercel Blob, CDN, external URL
+      if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('data:')) return url;
+      // Dashboard-served model (e.g. /api/restaurants/[slug]/models/burger.glb)
+      if (url.startsWith('/api/')) return DASHBOARD_API + url;
+      // Relative path — served from the lens origin (legacy / local dev)
+      return url;
+    }
+
     function _applyMenu() {
-      // AR-enabled dishes only go into 3D viewer state
       const arMenu = MENU.filter(m => m.hasAR && m.model);
-      setState({
-        menuItems:      arMenu,
-        uiType:         UI_TYPE,
-        paymentEnabled: PAYMENT_ENABLED,
-      });
-      // Make full menu available globally for DynamicUIManager
+      setState({ menuItems: arMenu, uiType: UI_TYPE, paymentEnabled: PAYMENT_ENABLED });
       window._allMenuItems   = MENU;
       window._menuCategories = CATEGORIES;
     }
 
-    // ── Launch AR mode ────────────────────────────────────────
+    // ── Launch AR ─────────────────────────────────────────────
 
     let arStarted = false;
-
     async function launchAR(preSelectIndex) {
       if (arStarted) return;
       arStarted = true;
 
-      const splash = document.getElementById('splash-screen');
-      if (splash) splash.classList.add('hidden');
+      document.getElementById('splash-screen')?.classList.add('hidden');
 
       if (!window._arOverlayEnabled) {
-        const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
-        hide('status-bar');
-        hide('surface-tap-hint');
+        ['status-bar','surface-tap-hint'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = 'none';
+        });
       }
 
-      // If a specific dish was requested (from "View in Table"), select it
       if (typeof preSelectIndex === 'number' && preSelectIndex >= 0) {
         setState({ currentDishIndex: preSelectIndex });
       }
@@ -1387,81 +1141,58 @@
         await window._arManager.start();
       } catch (e) {
         arStarted = false;
-        if (splash) splash.classList.remove('hidden');
+        document.getElementById('splash-screen')?.classList.remove('hidden');
         console.error(e);
         alert('AR failed: ' + e.message);
       }
     }
 
-    // ── Launch Dynamic mode ───────────────────────────────────
+    // ── Launch Dynamic ────────────────────────────────────────
 
     function launchDynamic() {
-      const splash = document.getElementById('splash-screen');
-      if (splash) splash.classList.add('hidden');
+      document.getElementById('splash-screen')?.classList.add('hidden');
 
-      // Hide all AR-mode UI so they don't bleed through
-      const arHide = ['status-bar','no-anchor-msg','scan-ring','surface-tap-hint',
-                      'model-loading','tutorial-overlay','info-card','ar-hint','menu-panel'];
-      arHide.forEach(id => {
+      // Hide all AR-only elements
+      ['status-bar','no-anchor-msg','scan-ring','surface-tap-hint',
+       'model-loading','tutorial-overlay','info-card','ar-hint','menu-panel'
+      ].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
       });
 
-      // Show Dynamic container and UI
-      const dynContainer = document.getElementById('dynamic-container');
-      const dynUI        = document.getElementById('dynamic-ui');
-      if (dynContainer) dynContainer.style.display = 'block';
-      if (dynUI)        dynUI.classList.add('active');
+      document.getElementById('dynamic-container').style.display = 'block';
+      document.getElementById('dynamic-ui').classList.add('active');
 
-      // Set up cart if payment is enabled
       if (PAYMENT_ENABLED) {
-        cartManager = new CartManager({
-          apiBase:        DASHBOARD_API,
-          restaurantSlug: State.restaurantSlug,
-        });
-        const fab = document.getElementById('cart-fab');
-        if (fab) fab.classList.add('visible');
+        cartManager = new CartManager({ apiBase: DASHBOARD_API, restaurantSlug: State.restaurantSlug });
+        document.getElementById('cart-fab')?.classList.add('visible');
       }
 
-      const dynManager = new DynamicUIManager({
+      window._dynManager = new DynamicUIManager({
         paymentEnabled: PAYMENT_ENABLED,
         onViewInTable: (dishIndex) => {
-          // User clicked "View in Table" — switch to AR with this dish
-          const dynContainer = document.getElementById('dynamic-container');
-          const dynUI        = document.getElementById('dynamic-ui');
-          const dynMenu      = document.getElementById('dynamic-menu-panel');
-          if (dynContainer) dynContainer.style.display = 'none';
-          if (dynUI)        dynUI.style.display        = 'none';
-          if (dynMenu)      dynMenu.style.display      = 'none';
+          ['dynamic-container','dynamic-ui','dynamic-menu-panel'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+          });
           launchAR(dishIndex);
         },
-        onAddToCart: (item) => {
-          if (cartManager) cartManager.addItem(item);
-        },
+        onAddToCart: (item) => { if (cartManager) cartManager.addItem(item); },
       });
 
-      window._dynManager = dynManager;
-      dynManager.start();
+      window._dynManager.start();
     }
 
-    // ── Boot ──────────────────────────────────────────────────
+    // ── Boot ─────────────────────────────────────────────────
 
     async function init() {
       await fetchMenu();
-
-      const openBtn = document.getElementById('open-menu-btn');
-
+      const btn = document.getElementById('open-menu-btn');
       if (UI_TYPE === 'dynamic') {
-        // Update splash button label for dynamic mode
-        if (openBtn) openBtn.textContent = 'Explore Menu';
-
-        openBtn?.addEventListener('click', () => {
-          if (window._dynManager) return;
-          launchDynamic();
-        });
+        btn.textContent = 'Explore Menu';
+        btn.addEventListener('click', () => { if (!window._dynManager) launchDynamic(); });
       } else {
-        // AR mode — existing behaviour
-        openBtn?.addEventListener('click', () => launchAR());
+        btn.addEventListener('click', () => launchAR());
       }
     }
 

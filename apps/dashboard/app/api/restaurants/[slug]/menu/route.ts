@@ -47,7 +47,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
         price: `₹${item.price}`,
         emoji: item.emoji || '🍽',
         cat: cat?.name.toLowerCase() ?? 'other',
-        model: item.modelUrl || null,
+        // Absolute URLs (Vercel Blob, CDN) are used as-is.
+        // Plain filenames are served through the dashboard models API.
+        model: item.modelUrl
+          ? (item.modelUrl.startsWith('http://') || item.modelUrl.startsWith('https://'))
+            ? item.modelUrl
+            : `/api/restaurants/${restaurant.slug}/models/${item.modelUrl}`
+          : null,
         modelScale: item.modelScale ?? null,
         hasAR: item.hasAr,
       }

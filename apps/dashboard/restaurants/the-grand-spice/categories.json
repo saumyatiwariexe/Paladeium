@@ -1,0 +1,6 @@
+[
+  { "id": "cat-starters", "restaurantId": "demo-restaurant-1", "name": "Starters",  "emoji": "🥗", "sortOrder": 1 },
+  { "id": "cat-mains",    "restaurantId": "demo-restaurant-1", "name": "Mains",     "emoji": "🍽", "sortOrder": 2 },
+  { "id": "cat-drinks",   "restaurantId": "demo-restaurant-1", "name": "Drinks",    "emoji": "🍹", "sortOrder": 3 },
+  { "id": "cat-desserts", "restaurantId": "demo-restaurant-1", "name": "Desserts",  "emoji": "🍰", "sortOrder": 4 }
+]

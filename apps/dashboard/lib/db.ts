@@ -1,40 +1,111 @@
 import fs from 'fs'
 import path from 'path'
-import type { Database } from './types'
+import type { Database, Restaurant, MenuCategory, MenuItem, Order } from './types'
 
-const DB_PATH = path.join(process.cwd(), 'data', 'db.json')
+// Each restaurant lives in its own subdirectory:
+//   restaurants/[slug]/config.json
+//   restaurants/[slug]/categories.json
+//   restaurants/[slug]/items.json
+//   restaurants/[slug]/orders.json
+//   restaurants/[slug]/models/      ← GLB files served via API
+//   restaurants/[slug]/images/
+//   restaurants/[slug]/targets/
+const RESTAURANTS_DIR = path.join(process.cwd(), 'restaurants')
+
 const EMPTY: Database = { restaurants: [], categories: [], items: [], orders: [] }
 
-// Upstash Redis is used in production when these env vars are set
 function hasRedis() {
   return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
 }
 
-function readFileDb(): Database {
+// ── Directory helpers ────────────────────────────────────────
+
+export function getRestaurantDir(slug: string): string {
+  return path.join(RESTAURANTS_DIR, slug)
+}
+
+function ensureDir(dirPath: string) {
+  if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true })
+}
+
+function readJsonSync<T>(filePath: string, fallback: T): T {
   try {
-    if (!fs.existsSync(DB_PATH)) return structuredClone(EMPTY)
-    return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8')) as Database
+    if (!fs.existsSync(filePath)) return fallback
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T
   } catch {
-    return structuredClone(EMPTY)
+    return fallback
   }
 }
 
-function writeFileDb(db: Database): void {
-  const dir = path.dirname(DB_PATH)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf-8')
+function writeJsonSync(filePath: string, data: unknown) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
 }
+
+// ── File-based DB (per-restaurant directories) ────────────────
+
+function scaffoldRestaurantDirs(slug: string) {
+  const dir = getRestaurantDir(slug)
+  ensureDir(dir)
+  ensureDir(path.join(dir, 'models'))
+  ensureDir(path.join(dir, 'images'))
+  ensureDir(path.join(dir, 'targets'))
+}
+
+function readFileDb(): Database {
+  if (!fs.existsSync(RESTAURANTS_DIR)) return structuredClone(EMPTY)
+
+  let slugs: string[] = []
+  try {
+    slugs = fs.readdirSync(RESTAURANTS_DIR).filter(entry =>
+      fs.statSync(path.join(RESTAURANTS_DIR, entry)).isDirectory()
+    )
+  } catch {
+    return structuredClone(EMPTY)
+  }
+
+  const restaurants: Restaurant[]  = []
+  const categories: MenuCategory[] = []
+  const items: MenuItem[]          = []
+  const orders: Order[]            = []
+
+  for (const slug of slugs) {
+    const dir  = getRestaurantDir(slug)
+    const rest = readJsonSync<Restaurant | null>(path.join(dir, 'config.json'), null)
+    if (!rest) continue
+    restaurants.push(rest)
+    categories.push(...readJsonSync<MenuCategory[]>(path.join(dir, 'categories.json'), []))
+    items.push(...readJsonSync<MenuItem[]>(path.join(dir, 'items.json'), []))
+    orders.push(...readJsonSync<Order[]>(path.join(dir, 'orders.json'), []))
+  }
+
+  return { restaurants, categories, items, orders }
+}
+
+function writeFileDb(db: Database): void {
+  ensureDir(RESTAURANTS_DIR)
+
+  for (const restaurant of db.restaurants) {
+    scaffoldRestaurantDirs(restaurant.slug)
+    const dir = getRestaurantDir(restaurant.slug)
+
+    writeJsonSync(path.join(dir, 'config.json'), restaurant)
+    writeJsonSync(path.join(dir, 'categories.json'), db.categories.filter(c => c.restaurantId === restaurant.id))
+    writeJsonSync(path.join(dir, 'items.json'),      db.items.filter(i => i.restaurantId === restaurant.id))
+    writeJsonSync(path.join(dir, 'orders.json'),     (db.orders ?? []).filter(o => o.restaurantId === restaurant.id))
+  }
+}
+
+// ── Public API ────────────────────────────────────────────────
 
 export async function readDb(): Promise<Database> {
   if (hasRedis()) {
     const { Redis } = await import('@upstash/redis')
     const redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL!,
+      url:   process.env.UPSTASH_REDIS_REST_URL!,
       token: process.env.UPSTASH_REDIS_REST_TOKEN!,
     })
     const stored = await redis.get<Database>('paladeium_db')
     if (!stored) {
-      // First run: seed Redis from the bundled db.json
       const seed = readFileDb()
       await redis.set('paladeium_db', seed)
       return seed
@@ -44,8 +115,21 @@ export async function readDb(): Promise<Database> {
   return readFileDb()
 }
 
+export async function writeDb(db: Database): Promise<void> {
+  if (hasRedis()) {
+    const { Redis } = await import('@upstash/redis')
+    const redis = new Redis({
+      url:   process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    })
+    await redis.set('paladeium_db', db)
+    return
+  }
+  writeFileDb(db)
+}
+
 export async function purgeExpiredDeletions(): Promise<void> {
-  const db = await readDb()
+  const db  = await readDb()
   const now = new Date()
   const toDelete = db.restaurants.filter(
     r => r.status === 'pendingDeletion' && r.deleteAt && new Date(r.deleteAt) <= now
@@ -56,17 +140,4 @@ export async function purgeExpiredDeletions(): Promise<void> {
   db.categories  = db.categories.filter(c => !ids.has(c.restaurantId))
   db.items       = db.items.filter(i => !ids.has(i.restaurantId))
   await writeDb(db)
-}
-
-export async function writeDb(db: Database): Promise<void> {
-  if (hasRedis()) {
-    const { Redis } = await import('@upstash/redis')
-    const redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL!,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-    })
-    await redis.set('paladeium_db', db)
-    return
-  }
-  writeFileDb(db)
 }

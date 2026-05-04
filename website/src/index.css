@@ -1,0 +1,368 @@
+@import "tailwindcss";
+
+/* 
+  ================================================================
+  1. DESIGN SYSTEM & THEME TOKENS
+  ================================================================
+*/
+@theme {
+  /* Colors */
+  --color-gold: #D4A853;
+  --color-gold-light: #F0C97A;
+  --color-gold-dark: #A07B30;
+  --color-dark: #0A0A0F;
+  --color-dark-2: #0F0F1A;
+  --color-dark-3: #13131F;
+  --color-text-primary: #F0EDE8;
+  --color-text-muted: rgba(240, 237, 232, 0.55);
+  --color-border-gold: rgba(212, 168, 83, 0.25);
+
+  /* Typography */
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Spacing System (Internal Tokens) */
+  --spacing-container-px-sm: 24px;
+  --spacing-container-px-md: 40px;
+  --spacing-container-px-lg: 48px;
+  --spacing-container-px-xl: 64px;
+  
+  --spacing-section-py-sm: 100px;
+  --spacing-section-py-md: 160px;
+  
+  --spacing-card-p-sm: 24px;
+  --spacing-card-p-md: 40px;
+}
+
+/* 
+  ================================================================
+  2. BASE RESET & SCROLLBAR
+  ================================================================
+*/
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0A0A0F;
+  color: #F0EDE8;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0A0A0F; }
+::-webkit-scrollbar-thumb { background: var(--color-gold); border-radius: 3px; }
+
+/* 
+  ================================================================
+  3. SYSTEM OVERRIDES (Force Layout System)
+  Bypasses JIT issues to ensure layout integrity.
+  ================================================================
+*/
+
+/* Core Display Utilities */
+.grid { display: grid !important; }
+.flex { display: flex !important; }
+
+/* Responsive Grid Columns */
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+@media (min-width: 768px) {
+  .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+
+@media (min-width: 1024px) {
+  .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+}
+
+/* Responsive Container Padding */
+.px-6 { padding-left: var(--spacing-container-px-sm) !important; padding-right: var(--spacing-container-px-sm) !important; }
+
+@media (min-width: 640px) {
+  .sm\:px-10 { padding-left: var(--spacing-container-px-md) !important; padding-right: var(--spacing-container-px-md) !important; }
+}
+
+@media (min-width: 1024px) {
+  .lg\:px-12 { padding-left: var(--spacing-container-px-lg) !important; padding-right: var(--spacing-container-px-lg) !important; }
+}
+
+@media (min-width: 1280px) {
+  .xl\:px-16 { padding-left: var(--spacing-container-px-xl) !important; padding-right: var(--spacing-container-px-xl) !important; }
+}
+
+/* Section Vertical Spacing */
+.py-32 { padding-top: var(--spacing-section-py-sm) !important; padding-bottom: var(--spacing-section-py-sm) !important; }
+.py-40 { padding-top: var(--spacing-section-py-md) !important; padding-bottom: var(--spacing-section-py-md) !important; }
+
+@media (min-width: 768px) {
+  .md\:py-40 { padding-top: var(--spacing-section-py-md) !important; padding-bottom: var(--spacing-section-py-md) !important; }
+}
+
+/* Common Margin & Padding Utilities */
+.mb-2  { margin-bottom: 8px !important; }
+.mb-4  { margin-bottom: 16px !important; }
+.mb-6  { margin-bottom: 24px !important; }
+.mb-8  { margin-bottom: 32px !important; }
+.mb-10 { margin-bottom: 40px !important; }
+.mb-12 { margin-bottom: 48px !important; }
+.mb-14 { margin-bottom: 56px !important; }
+.mb-16 { margin-bottom: 64px !important; }
+
+.mt-1  { margin-top: 4px !important; }
+.mt-2  { margin-top: 8px !important; }
+.mt-4  { margin-top: 16px !important; }
+.mt-8  { margin-top: 32px !important; }
+.mt-10 { margin-top: 40px !important; }
+.mt-16 { margin-top: 64px !important; }
+
+.py-1   { padding-top: 4px !important; padding-bottom: 4px !important; }
+.py-2   { padding-top: 8px !important; padding-bottom: 8px !important; }
+.py-3   { padding-top: 12px !important; padding-bottom: 12px !important; }
+.py-5   { padding-top: 20px !important; padding-bottom: 20px !important; }
+.py-2\.5 { padding-top: 10px !important; padding-bottom: 10px !important; }
+.py-3\.5 { padding-top: 14px !important; padding-bottom: 14px !important; }
+
+.px-2   { padding-left: 8px !important; padding-right: 8px !important; }
+.px-3   { padding-left: 12px !important; padding-right: 12px !important; }
+.px-4   { padding-left: 16px !important; padding-right: 16px !important; }
+.px-5   { padding-left: 20px !important; padding-right: 20px !important; }
+.px-8   { padding-left: 32px !important; padding-right: 32px !important; }
+
+/* Component Gaps */
+.gap-4 { gap: 24px !important; }
+.gap-5 { gap: 32px !important; }
+.gap-6 { gap: 48px !important; }
+.gap-8 { gap: 64px !important; }
+.gap-10 { gap: 80px !important; }
+.gap-12 { gap: 100px !important; }
+.gap-14 { gap: 120px !important; }
+
+/* Standardized Padding Utilities for Cards */
+.p-8  { padding: var(--spacing-card-p-sm) !important; }
+.p-10 { padding: var(--spacing-card-p-md) !important; }
+
+@media (min-width: 768px) {
+  .md\:p-10 { padding: var(--spacing-card-p-md) !important; }
+  .md\:p-12 { padding: 48px !important; }
+}
+
+/* 
+  ================================================================
+  4. PREMIUM UI COMPONENTS
+  ================================================================
+*/
+
+.glass {
+  background: rgba(10, 10, 20, 0.82);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--color-border-gold);
+  border-radius: 24px;
+}
+
+.glass-light {
+  background: rgba(20, 20, 35, 0.6);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(212, 168, 83, 0.15);
+  border-radius: 20px;
+}
+
+.card-hover {
+  transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 60px rgba(212, 168, 83, 0.15);
+  border-color: rgba(212, 168, 83, 0.6) !important;
+}
+
+/* Buttons */
+.btn-gold {
+  background: linear-gradient(135deg, var(--color-gold), var(--color-gold-light), var(--color-gold));
+  background-size: 200% auto;
+  color: var(--color-dark);
+  font-weight: 600;
+  padding: 14px 28px !important;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.btn-gold:hover {
+  background-position: right center;
+  box-shadow: 0 0 30px rgba(212, 168, 83, 0.5);
+  transform: translateY(-2px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-gold);
+  border: 1.5px solid rgba(212, 168, 83, 0.4);
+  padding: 14px 28px !important;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.btn-ghost:hover {
+  background: rgba(212, 168, 83, 0.1);
+  border-color: var(--color-gold);
+}
+
+
+.ar-badge {
+  background: linear-gradient(135deg, #D4A853, #F0C97A);
+  color: #0A0A0F;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* 
+  ================================================================
+  6. UTILITY CLASSES (Typography & Backgrounds)
+  ================================================================
+*/
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, #D4A853 0%, #F0C97A 50%, #D4A853 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gold-glow {
+  box-shadow: 0 0 30px rgba(212, 168, 83, 0.3), 0 0 60px rgba(212, 168, 83, 0.1);
+}
+
+.gold-glow-text {
+  text-shadow: 0 0 30px rgba(212, 168, 83, 0.5);
+}
+
+.divider-gold {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 168, 83, 0.5), transparent);
+}
+
+.mesh-bg {
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 40%, rgba(212, 168, 83, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 60% at 80% 60%, rgba(212, 168, 83, 0.05) 0%, transparent 50%),
+    #0A0A0F;
+}
+
+.noise::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* 
+  ================================================================
+  7. ANIMATIONS (Entrance & Infinite)
+  ================================================================
+*/
+
+@keyframes scanRing {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 0.4; }
+  100% { transform: scale(0.8); opacity: 0.8; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes pulse-gold {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes rotateRing {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Entrance Keyframes */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(40px); filter: blur(10px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-40px); filter: blur(10px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-60px); filter: blur(10px); }
+  to { opacity: 1; transform: translateX(0); filter: blur(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(60px); filter: blur(10px); }
+  to { opacity: 1; transform: translateX(0); filter: blur(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.9); filter: blur(10px); }
+  to { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+
+/* Infinite Classes */
+.animate-float { animation: float 4s ease-in-out infinite; }
+.animate-scan { animation: scanRing 2s ease-in-out infinite; }
+.animate-pulse-gold { animation: pulse-gold 2s ease-in-out infinite; }
+.animate-rotate-ring { animation: rotateRing 8s linear infinite; }
+
+/* Entrance Classes (Direct) - No initial opacity:0 to prevent black screen if animation fails */
+.reveal-up { animation: fadeInUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.reveal-down { animation: fadeInDown 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.reveal-left { animation: slideInLeft 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.reveal-right { animation: slideInRight 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.reveal-scale { animation: scaleIn 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+/* Stagger Helpers */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+.delay-600 { animation-delay: 600ms; }
+.delay-700 { animation-delay: 700ms; }
+.delay-800 { animation-delay: 800ms; }
+.delay-900 { animation-delay: 900ms; }
+.delay-1000 { animation-delay: 1000ms; }
