@@ -9,11 +9,21 @@ const PUBLIC_PREFIXES = ['/login', '/api/auth/', '/_next', '/favicon.ico']
 
 function isPublic(pathname: string, method: string): boolean {
   if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) return true
-  // Public: GET /api/restaurants/:slug/menu — read-only for AR Lens
+  
   if (
-    ['GET', 'HEAD', 'OPTIONS'].includes(method) &&
-    /^\/api\/restaurants\/[^/]+\/menu$/.test(pathname)
+    (
+      ['GET', 'HEAD', 'OPTIONS'].includes(method) &&
+      (
+        /^\/api\/restaurants\/[^/]+\/menu$/.test(pathname) ||
+        /^\/api\/restaurants\/[^/]+\/models\/.*$/.test(pathname)
+      )
+    ) ||
+    (
+      method === 'POST' &&
+      /^\/api\/restaurants\/[^/]+\/orders$/.test(pathname)
+    )
   ) return true
+
   return false
 }
 
