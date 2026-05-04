@@ -25,7 +25,9 @@ export function CategoryPills() {
               : "bg-white text-gray-500 border-gray-100"
           )}
         >
-          {cat.charAt(0).toUpperCase() + cat.slice(1)}
+          {typeof cat === 'string' 
+            ? cat.charAt(0).toUpperCase() + cat.slice(1) 
+            : 'Unknown'}
         </button>
       ))}
     </div>

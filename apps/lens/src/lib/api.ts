@@ -22,7 +22,7 @@ export async function fetchRestaurantData(slug: string): Promise<{ menu: Dish[],
 
   return {
     menu,
-    categories: ['all', ...(data.categories || [])],
+    categories: ['all', ...(data.categories || []).map((c: any) => c.name.toLowerCase())],
     restaurant: {
       name: data.restaurant?.name || 'Paladeium',
       uiType: data.restaurant?.uiType || 'dynamic',
