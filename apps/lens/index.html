@@ -20,101 +20,147 @@
   </script>
 
   <style>
-    /* ═══════════════════════════════════════
-       DESIGN TOKENS
-    ═══════════════════════════════════════ */
     :root {
-      --bg:          #0A0A0F;
-      --surface:     #131320;
-      --surface-2:   #1C1C2E;
-      --border:      rgba(255,255,255,0.08);
-      --border-2:    rgba(255,255,255,0.04);
-
-      --accent:      #FF6636;
-      --accent-lt:   #FF8C6B;
-      --accent-dim:  rgba(255,102,54,0.14);
-      --accent-glow: rgba(255,102,54,0.28);
-
-      --text:  #FFFFFF;
-      --t2:    rgba(255,255,255,0.56);
-      --t3:    rgba(255,255,255,0.28);
-      --star:  #FFB800;
+      --primary: #FF4B3A;
+      --primary-soft: rgba(255, 75, 58, 0.08);
+      --bg: #F8F9FA;
+      --card-bg: #FFFFFF;
+      --text: #1C1C1E;
+      --text-muted: #8E8E93;
+      --shadow: 0 12px 40px rgba(0,0,0,0.06);
+      --shadow-sm: 0 4px 12px rgba(0,0,0,0.03);
+      --radius-lg: 32px;
+      --radius-md: 20px;
+      --radius-sm: 12px;
     }
 
-    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body {
-      width:100%; height:100%; overflow:hidden;
-      background:var(--bg);
-      font-family:'Inter', sans-serif;
-      color:var(--text);
-      -webkit-font-smoothing:antialiased;
+      width: 100%; height: 100%; overflow: hidden;
+      background: var(--bg);
+      font-family: 'Inter', -apple-system, sans-serif;
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* ═══════════════════════════════════════
-       SPLASH
-    ═══════════════════════════════════════ */
+    /* ─── Splash Screen ─── */
     #splash-screen {
-      position:fixed; inset:0; z-index:200;
-      background: radial-gradient(ellipse 180% 110% at 50% -30%, #200C02 0%, #0A0A0F 60%);
-      display:flex; align-items:center; justify-content:center;
-      transition:opacity 0.5s ease, transform 0.5s ease;
+      position: fixed; inset: 0; z-index: 200;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    #splash-screen.hidden { opacity:0; pointer-events:none; transform:scale(1.04); }
-
-    .splash-inner {
-      display:flex; flex-direction:column; align-items:center;
-      padding:48px 32px; text-align:center; width:100%; max-width:340px;
-    }
-    .splash-icon-wrap {
-      width:96px; height:96px; border-radius:28px; margin-bottom:28px;
-      background:linear-gradient(145deg,rgba(255,102,54,0.18),rgba(255,102,54,0.04));
-      border:1px solid rgba(255,102,54,0.3);
-      box-shadow:0 0 60px rgba(255,102,54,0.22), 0 24px 48px rgba(0,0,0,0.5);
-      display:flex; align-items:center; justify-content:center; font-size:48px;
-    }
-    .splash-logo {
-      font-family:'Playfair Display',serif;
-      font-size:38px; font-weight:800; line-height:1; color:var(--text);
-    }
-    .splash-logo span { color:var(--accent); }
-    .splash-tagline { font-size:13px; color:var(--t2); margin-top:8px; }
-
+    #splash-screen.hidden { opacity: 0; pointer-events: none; }
+    .splash-inner { display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%; max-width: 320px; }
+    .splash-logo { font-family: 'Playfair Display', serif; font-size: 42px; font-weight: 800; color: var(--primary); }
+    .splash-logo span { color: var(--text); font-weight: 300; }
+    .splash-tagline { font-size: 14px; color: var(--text-muted); margin-top: 8px; letter-spacing: 0.5px; }
     #open-menu-btn {
-      margin-top:56px; width:100%; padding:19px 0;
-      border:none; border-radius:20px; cursor:pointer;
-      font-size:16px; font-weight:700; color:#fff;
-      background:linear-gradient(135deg, var(--accent) 0%, var(--accent-lt) 100%);
-      box-shadow:0 10px 36px rgba(255,102,54,0.42), 0 2px 8px rgba(0,0,0,0.3);
-      font-family:'Inter',sans-serif;
-      transition:transform 0.15s ease, box-shadow 0.15s ease;
+      margin-top: 60px; width: 100%; padding: 20px 0;
+      border: none; border-radius: 50px; cursor: pointer;
+      font-size: 17px; font-weight: 700; color: #fff;
+      background: var(--primary);
+      box-shadow: 0 12px 32px rgba(255, 75, 58, 0.35);
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s ease;
     }
-    #open-menu-btn:active { transform:scale(0.97); box-shadow:0 4px 18px rgba(255,102,54,0.3); }
+    #open-menu-btn:active { transform: scale(0.96); box-shadow: 0 6px 16px rgba(255, 75, 58, 0.2); }
 
-    /* ═══════════════════════════════════════
-       AR CANVAS
-    ═══════════════════════════════════════ */
-    #ar-container { position:fixed; inset:0; z-index:0; }
-    #ar-container > canvas { width:100% !important; height:100% !important; }
+    /* ─── AR UI ─── */
+    #ar-container { position: fixed; inset: 0; z-index: 0; }
+    #ar-container > canvas { width: 100% !important; height: 100% !important; }
 
-    /* ═══════════════════════════════════════
-       AR UI — STATUS BAR
-    ═══════════════════════════════════════ */
-    #status-bar {
-      position:fixed; top:0; left:0; right:0; z-index:50;
-      display:flex; align-items:center; justify-content:space-between;
-      padding:16px 20px 14px; pointer-events:none;
+    #status-bar, #dynamic-header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 24px 32px; pointer-events: none;
     }
-    .brand { font-family:'Playfair Display',serif; font-size:18px; font-weight:700; color:var(--text); }
-    .brand span { color:var(--accent); }
+    .brand, .dynamic-brand { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 800; color: var(--primary); pointer-events: auto; }
+    .brand span, .dynamic-brand span { color: var(--text); font-weight: 300; }
     #anchor-status {
-      font-size:11px; font-weight:500; padding:5px 14px; border-radius:20px;
-      background:rgba(10,10,15,0.85); backdrop-filter:blur(12px);
-      border:1px solid var(--border); color:var(--t2);
-      display:flex; align-items:center; gap:6px; transition:all 0.4s ease;
+      font-size: 12px; font-weight: 700; padding: 10px 20px; border-radius: 50px;
+      background: var(--card-bg); box-shadow: var(--shadow-sm); color: var(--text-muted);
+      display: flex; align-items: center; gap: 8px; pointer-events: auto;
     }
-    #anchor-status.found { background:rgba(60,180,80,0.12); color:rgb(110,210,130); border-color:rgba(60,180,80,0.25); }
-    .dot { width:6px; height:6px; border-radius:50%; background:currentColor; animation:pulse 2s ease-in-out infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    #anchor-status.found { color: #34C759; }
+
+    /* ─── DYNAMIC UI ─── */
+    #dynamic-container { position: fixed; inset: 0; z-index: 0; background: #FDFDFD; display: none; }
+    #dynamic-ui { display: none; position: fixed; inset: 0; z-index: 10; pointer-events: none; }
+    #dynamic-ui.active { display: block; }
+
+    .categories-section { position: absolute; top: 100px; left: 0; right: 0; padding: 0 32px; pointer-events: auto; }
+    .categories { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 20px; scrollbar-width: none; }
+    .categories::-webkit-scrollbar { display: none; }
+    .cat-pill {
+      flex-shrink: 0; padding: 14px 28px; border-radius: 50px; font-size: 14px; font-weight: 700;
+      background: var(--card-bg); color: var(--text-muted); border: none; box-shadow: var(--shadow-sm);
+      cursor: pointer; transition: all 0.3s ease;
+    }
+    .cat-pill.active { background: var(--primary); color: #FFF; box-shadow: 0 10px 20px rgba(255, 75, 58, 0.2); }
+
+    #dynamic-dish-info {
+      position: absolute; bottom: 260px; left: 50%; transform: translateX(-50%);
+      width: 90%; max-width: 420px; background: var(--card-bg); border-radius: var(--radius-lg);
+      padding: 32px; box-shadow: var(--shadow); pointer-events: auto;
+    }
+    #dynamic-dish-emoji { font-size: 64px; margin-bottom: 16px; }
+    #dynamic-dish-name { font-size: 32px; font-weight: 800; color: var(--text); line-height: 1.1; margin-bottom: 4px; }
+    #dynamic-dish-price { font-size: 24px; font-weight: 700; color: var(--primary); margin-bottom: 12px; }
+    #dynamic-dish-desc { font-size: 15px; color: var(--text-muted); line-height: 1.6; margin-bottom: 32px; }
+    .dynamic-dish-actions { display: flex; gap: 16px; }
+    #dynamic-view-ar-btn {
+      flex: 1; background: var(--primary); color: #FFF; border: none; border-radius: 20px;
+      padding: 18px; font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: 0 10px 20px rgba(255, 75, 58, 0.2);
+    }
+
+    #dynamic-nav { position: absolute; bottom: 200px; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 32px; pointer-events: auto; }
+    .dynamic-nav-btn { width: 48px; height: 48px; background: var(--card-bg); border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--text); box-shadow: var(--shadow-sm); cursor: pointer; }
+    #dynamic-dots { display: flex; gap: 10px; }
+    .nav-dot { width: 10px; height: 10px; border-radius: 50%; background: #E5E5EA; transition: all 0.3s ease; }
+    .nav-dot.active { background: var(--primary); width: 24px; border-radius: 12px; }
+
+    /* ─── BOTTOM MENU ─── */
+    #dynamic-menu-panel { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; transform: translateY(100%); transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: auto; }
+    #dynamic-menu-panel.minimized { transform: translateY(calc(100% - 160px)); }
+    #dynamic-menu-panel.open { transform: translateY(0); }
+    .dynamic-menu-card { background: var(--card-bg); border-radius: 48px 48px 0 0; padding: 16px 32px 48px; box-shadow: 0 -10px 40px rgba(0,0,0,0.05); max-height: 85vh; display: flex; flex-direction: column; }
+    #dynamic-menu-handle-area { padding: 12px 0 32px; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+    .dynamic-handle-bar { width: 44px; height: 6px; border-radius: 10px; background: #F2F2F7; margin-bottom: 24px; }
+    .dynamic-menu-header { width: 100%; display: flex; align-items: center; justify-content: space-between; }
+    .dynamic-menu-header h3 { font-size: 26px; font-weight: 800; }
+    #dynamic-menu-close { background: #F2F2F7; border: none; border-radius: 50px; padding: 10px 24px; font-size: 14px; font-weight: 700; }
+
+    .dish-grid { display: flex; flex-direction: column; gap: 20px; overflow-y: auto; padding: 10px 0; scrollbar-width: none; }
+    .dish-grid::-webkit-scrollbar { display: none; }
+    .dish-card { display: flex; align-items: center; gap: 20px; background: var(--card-bg); border-radius: var(--radius-md); padding: 20px; box-shadow: var(--shadow-sm); cursor: pointer; border: 2px solid transparent; transition: all 0.2s ease; }
+    .dish-card.active { border-color: var(--primary); background: var(--primary-soft); }
+    .dish-emoji { font-size: 36px; width: 72px; height: 72px; background: #F8F9FA; border-radius: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .dish-info-content { flex: 1; }
+    .dish-name { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+    .dish-desc { font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+    .dish-price-badge { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .dish-price { font-size: 18px; font-weight: 800; color: var(--primary); }
+    .dish-ar-badge { background: #34C759; color: #FFF; font-size: 10px; font-weight: 900; padding: 3px 8px; border-radius: 8px; }
+
+    /* ─── CART ─── */
+    #cart-fab { position: fixed; bottom: 48px; right: 32px; z-index: 100; width: 68px; height: 68px; background: var(--primary); border: none; border-radius: 22px; display: none; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 15px 30px rgba(255, 75, 58, 0.35); }
+    #cart-fab.visible { display: flex; }
+    #cart-badge { position: absolute; top: -10px; right: -10px; background: var(--text); color: #FFF; min-width: 26px; height: 26px; border-radius: 13px; font-size: 13px; font-weight: 800; display: none; align-items: center; justify-content: center; }
+
+    /* ─── LOADING & UTILS ─── */
+    #model-loading, #dynamic-model-loading { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%); z-index: 60; opacity: 0; pointer-events: none; }
+    #model-loading.visible, #dynamic-model-loading.visible { opacity: 1; }
+    .skeleton-card { background: var(--card-bg); border-radius: var(--radius-lg); padding: 32px; width: 300px; box-shadow: var(--shadow); }
+    .skeleton-image { height: 180px; background: #F2F2F7; border-radius: 24px; margin-bottom: 24px; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+
+    #no-anchor-msg, #ar-hint { position: fixed; z-index: 45; background: rgba(0,0,0,0.8); color: #FFF; border-radius: 20px; padding: 16px 24px; font-size: 14px; backdrop-filter: blur(10px); }
+    #no-anchor-msg { top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; opacity: 0; pointer-events: none; }
+    #no-anchor-msg.visible { opacity: 1; }
+    #ar-hint { bottom: 120px; left: 50%; transform: translateX(-50%); opacity: 0; pointer-events: none; }
+    #ar-hint.visible { opacity: 1; }
+  </style>
 
     /* ═══════════════════════════════════════
        AR UI — INFO CARD
@@ -675,20 +721,19 @@
 </head>
 <body>
 
-  <!-- ═══ SPLASH ═══ -->
+  <!-- ─── SPLASH ─── -->
   <div id="splash-screen">
     <div class="splash-inner">
-      <div class="splash-icon-wrap">🍽</div>
       <div class="splash-logo">Paladeium<span> Lens</span></div>
-      <p class="splash-tagline">Your interactive restaurant menu</p>
-      <button id="open-menu-btn">Open Menu</button>
+      <p class="splash-tagline">Experience food in AR</p>
+      <button id="open-menu-btn">Get Started</button>
     </div>
   </div>
 
-  <!-- ═══ AR CANVAS ═══ -->
+  <!-- ─── AR CANVAS ─── -->
   <div id="ar-container"></div>
 
-  <!-- ═══ AR — STATUS BAR ═══ -->
+  <!-- ─── TOP STATUS ─── -->
   <div id="status-bar">
     <div class="brand">Paladeium<span> Lens</span></div>
     <div id="anchor-status">
@@ -697,29 +742,94 @@
     </div>
   </div>
 
-  <!-- ═══ AR — NO ANCHOR ═══ -->
-  <div id="no-anchor-msg">
-    <div class="icon">📷</div>
-    <p>Point your camera at the <strong>menu marker</strong><br>to launch the AR experience</p>
+  <!-- ─── AR — MENU PANEL ─── -->
+  <div id="menu-panel">
+    <div class="dynamic-menu-card">
+      <div id="menu-handle-area" style="padding: 12px 0 24px; display: flex; flex-direction: column; align-items: center; cursor: pointer;">
+        <div class="dynamic-handle-bar"></div>
+        <div class="dynamic-menu-header">
+          <h3>AR Menu</h3>
+          <span style="font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase;">Tap to view in 3D</span>
+        </div>
+      </div>
+      <div class="categories" id="ar-categories">
+        <!-- Pills generated via JS -->
+      </div>
+      <div class="dish-grid" id="ar-dish-grid">
+        <!-- Grid items generated via JS -->
+      </div>
+    </div>
   </div>
 
-  <!-- ═══ AR — SCAN RING ═══ -->
+  <div id="tutorial-overlay">
+    <div class="tutorial-hand">👆</div>
+    <div class="tutorial-text">Swipe to explore</div>
+  </div>
+
   <div id="scan-ring">
     <div class="scan-ring-track"></div>
     <div class="scan-ring-fill"></div>
     <div class="scan-ring-icon">🎯</div>
   </div>
 
-  <!-- ═══ AR — SURFACE HINT ═══ -->
-  <div id="surface-tap-hint">
-    <div class="tap-pulse"></div>
-    Tap to place dish on surface
-  </div>
-  <div id="surface-controls">
-    <button id="surface-reposition-btn">Reposition</button>
+  <!-- ─── DYNAMIC CONTAINER ─── -->
+  <div id="dynamic-container"></div>
+
+  <!-- ─── DYNAMIC UI ─── -->
+  <div id="dynamic-ui">
+    <div id="dynamic-header">
+      <div class="dynamic-brand">Paladeium<span> Lens</span></div>
+    </div>
+
+    <!-- Categories -->
+    <div class="categories-section">
+      <div class="categories" id="dynamic-categories">
+        <!-- Pills generated via JS -->
+      </div>
+    </div>
+
+    <!-- Dish Info Card -->
+    <div id="dynamic-dish-info">
+      <div id="dynamic-dish-emoji">🍔</div>
+      <h2 id="dynamic-dish-name">Loading Dish…</h2>
+      <div id="dynamic-dish-price">$0.00</div>
+      <p id="dynamic-dish-desc">Fetching details from the kitchen…</p>
+      <div class="dynamic-dish-actions">
+        <button id="dynamic-view-ar-btn">View in 3D AR</button>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div id="dynamic-nav">
+      <button class="dynamic-nav-btn" id="dynamic-prev">←</button>
+      <div id="dynamic-dots"></div>
+      <button class="dynamic-nav-btn" id="dynamic-next">→</button>
+    </div>
+
+    <!-- Bottom Menu Panel -->
+    <div id="dynamic-menu-panel" class="minimized">
+      <div class="dynamic-menu-card">
+        <div id="dynamic-menu-handle-area">
+          <div class="dynamic-handle-bar"></div>
+          <div class="dynamic-menu-header">
+            <h3>Our Menu</h3>
+            <button id="dynamic-menu-close">Close</button>
+          </div>
+        </div>
+        <div class="dish-grid" id="dynamic-dish-grid">
+          <!-- Grid items generated via JS -->
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- ═══ AR — LOADING ═══ -->
+  <!-- ─── HINTS & UTILS ─── -->
+  <div id="no-anchor-msg">
+    <p>Point at the menu to start AR</p>
+  </div>
+
+  <div id="ar-hint"><span>👆</span> Swipe to browse</div>
+
   <div id="model-loading">
     <div class="skeleton-card">
       <div class="skeleton-image"></div>
@@ -728,87 +838,6 @@
     </div>
   </div>
 
-  <!-- ═══ AR — TUTORIAL ═══ -->
-  <div id="tutorial-overlay">
-    <div class="tutorial-hand">👆</div>
-    <div class="tutorial-text">Swipe to browse dishes</div>
-  </div>
-
-  <!-- ═══ AR — SWIPE HINT ═══ -->
-  <div id="ar-hint"><span>👆</span> Swipe left / right to change dish</div>
-
-  <!-- ═══ AR — INFO CARD ═══ -->
-  <div id="info-card">
-    <div class="info-header">
-      <span class="info-name" id="ar-item-name">Loading…</span>
-      <span class="info-price" id="ar-item-price"></span>
-    </div>
-    <div class="info-desc" id="ar-item-desc"></div>
-  </div>
-
-  <!-- ═══ AR — MENU PANEL ═══ -->
-  <div id="menu-panel">
-    <div class="menu-handle-container" id="menu-handle-container">
-      <div class="menu-handle"></div>
-      <div class="menu-card">
-        <div class="menu-header">
-          <h3>Menu</h3>
-          <span class="subtitle">SWIPE TO BROWSE</span>
-        </div>
-        <div class="categories" id="ar-categories"></div>
-        <div class="dish-grid" id="ar-dish-grid"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══ DYNAMIC — 3D CANVAS ═══ -->
-  <div id="dynamic-container"></div>
-
-  <!-- ═══ DYNAMIC — APP SHELL ═══ -->
-  <div id="dynamic-ui">
-
-    <!-- Top app header -->
-    <div id="dynamic-header">
-      <button id="dynamic-menu-btn">☰</button>
-      <span class="dynamic-brand">Paladeium<span> Lens</span></span>
-      <button id="cart-fab">🛒<span id="cart-badge"></span></button>
-    </div>
-
-    <!-- Model loading skeleton -->
-    <div id="dynamic-model-loading">
-      <div class="skeleton-card">
-        <div class="skeleton-image"></div>
-        <div class="skeleton-line"></div>
-        <div class="skeleton-line short"></div>
-      </div>
-    </div>
-
-    <!-- Empty state -->
-    <div id="dynamic-empty">
-      <div class="empty-icon">🍽</div>
-      <p>No 3D dishes yet.<br>Enable AR models in the dashboard.</p>
-    </div>
-
-    <!-- Dish navigation arrows -->
-    <button id="dynamic-prev-btn">‹</button>
-    <button id="dynamic-next-btn">›</button>
-
-    <!-- Position indicator dots -->
-    <div id="dynamic-dots"></div>
-
-    <!-- Dish info bottom panel -->
-    <div id="dynamic-dish-info">
-      <div class="dyn-top-row">
-        <div class="dyn-emoji-box">
-          <span id="dynamic-dish-emoji">🍽</span>
-        </div>
-        <div class="dyn-rating-pill">★ 4.8</div>
-      </div>
-
-      <div class="dyn-name-row">
-        <div id="dynamic-dish-name">Loading…</div>
-        <div id="dynamic-dish-price">₹0</div>
-      </div>
 
       <div id="dynamic-dish-desc"></div>
 
@@ -1068,12 +1097,11 @@
 
     async function init() {
       await fetchMenu();
-      const btn = document.getElementById('open-menu-btn');
+      const openBtn = document.getElementById('open-menu-btn');
       if (UI_TYPE === 'dynamic') {
-        btn.textContent = 'Explore the Menu';
-        btn.addEventListener('click', () => { if (!window._dynManager) launchDynamic(); });
+        launchDynamic();
       } else {
-        btn.addEventListener('click', () => launchAR());
+        openBtn?.addEventListener('click', () => launchAR());
       }
     }
 
