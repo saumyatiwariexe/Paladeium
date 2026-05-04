@@ -16,10 +16,10 @@ function CarouselContent() {
   const activeDishIndex = dishes.findIndex(d => d.id === activeDishId);
   const groupRef = useRef<THREE.Group>(null);
 
-  useFrame((state, delta) => {
+  useFrame(() => {
     if (groupRef.current) {
-      const targetX = -activeDishIndex * 4; // Wider spacing
-      groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, targetX, 0.1);
+      const targetX = -activeDishIndex * 4;
+      groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, targetX, 0.12);
     }
   });
 
@@ -27,15 +27,15 @@ function CarouselContent() {
     <group ref={groupRef}>
       {dishes.map((dish, idx) => (
         <group key={dish.id} position={[idx * 4, 0, 0]}>
-          <Float speed={2} rotationIntensity={0.4} floatIntensity={0.4}>
+          <Float speed={1.5} rotationIntensity={0.3} floatIntensity={0.3}>
             {dish.model ? (
               <Suspense fallback={null}>
-                <Model url={dish.model} scale={dish.modelScale * 1.2} />
+                <Model url={dish.model} scale={(dish.modelScale || 1) * 1.2} />
               </Suspense>
             ) : (
               <mesh>
                 <sphereGeometry args={[0.6, 32, 32]} />
-                <meshStandardMaterial color="#FF4B3A" />
+                <meshStandardMaterial color="#E23744" />
               </mesh>
             )}
           </Float>
@@ -46,50 +46,31 @@ function CarouselContent() {
 }
 
 export function ModelCarousel() {
-  const { dishes, activeDishId, setActiveDish } = useApp();
-  const activeDishIndex = dishes.findIndex(d => d.id === activeDishId);
-
   return (
-    <div className="fixed inset-0 z-10 pointer-events-auto">
-      <Canvas shadows camera={{ position: [0, 0.5, 4.5], fov: 40 }}>
-        <ambientLight intensity={0.7} />
-        <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} castShadow />
-        
-        {/* Presentation controls for rotation */}
+    <div className="w-full h-full" style={{ touchAction: 'none' }}>
+      <Canvas
+        shadows
+        camera={{ position: [0, 0.5, 4.5], fov: 42 }}
+        style={{ background: 'transparent', width: '100%', height: '100%' }}
+      >
+        <ambientLight intensity={0.9} />
+        <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} castShadow intensity={1.2} />
+        <pointLight position={[-10, -10, -5]} intensity={0.3} />
+
         <PresentationControls
           global
-          config={{ mass: 2, tension: 500 }}
+          config={{ mass: 2, tension: 400 }}
           snap={{ mass: 4, tension: 1500 }}
-          rotation={[0.3, 0, 0]}
-          polar={[-0.2, 0.4]}
+          rotation={[0.2, 0, 0]}
+          polar={[-0.25, 0.35]}
           azimuth={[-Math.PI / 2, Math.PI / 2]}
         >
           <CarouselContent />
         </PresentationControls>
 
-        <ContactShadows position={[0, -1.2, 0]} opacity={0.3} scale={15} blur={2.5} far={4} />
+        <ContactShadows position={[0, -1.4, 0]} opacity={0.25} scale={15} blur={3} far={5} />
         <Environment preset="city" />
       </Canvas>
-
-      {/* Swipe Detectors (Invisible left/right regions) */}
-      <div className="absolute top-1/4 bottom-1/3 left-0 right-0 z-20 flex justify-between pointer-events-none">
-        <button 
-          onClick={() => {
-            const nextIdx = Math.max(0, activeDishIndex - 1);
-            setActiveDish(dishes[nextIdx].id);
-          }}
-          className="w-1/4 h-full pointer-events-auto cursor-w-resize"
-          aria-label="Previous Dish"
-        />
-        <button 
-          onClick={() => {
-            const nextIdx = Math.min(dishes.length - 1, activeDishIndex + 1);
-            setActiveDish(dishes[nextIdx].id);
-          }}
-          className="w-1/4 h-full pointer-events-auto cursor-e-resize"
-          aria-label="Next Dish"
-        />
-      </div>
     </div>
   );
 }
