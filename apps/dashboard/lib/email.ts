@@ -1,4 +1,4 @@
-const FROM = 'Paladeium <invites@paladeium.com>'
+const FROM = process.env.RESEND_FROM ?? 'Paladeium <onboarding@resend.dev>'
 
 function inviteHtml(inviteUrl: string, role: string, restaurantName?: string): string {
   const roleLabel = role.charAt(0).toUpperCase() + role.slice(1)

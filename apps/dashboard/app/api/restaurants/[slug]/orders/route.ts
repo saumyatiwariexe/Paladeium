@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getIronSession } from 'iron-session'
 import { z } from 'zod'
 import { readDb, writeDb } from '@/lib/db'
+import { sessionOptions, type SessionData } from '@/lib/session'
+import { canPerform } from '@/lib/permissions'
 import { v4 as uuid } from 'uuid'
 
 type Params = { params: { slug: string } }
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 }
 
@@ -30,6 +33,61 @@ const OrderSchema = z.object({
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 200, headers: CORS })
+}
+
+// GET /api/restaurants/[slug]/orders — dashboard: list orders for a restaurant
+export async function GET(req: NextRequest, { params }: Params) {
+  const res     = NextResponse.next()
+  const session = await getIronSession<SessionData>(req, res, sessionOptions)
+  if (!session.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const db = await readDb()
+  const restaurant =
+    db.restaurants.find(r => r.slug === params.slug) ??
+    db.restaurants.find(r => r.id   === params.slug)
+
+  if (!restaurant) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!canPerform(session, 'read', restaurant.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const since  = req.nextUrl.searchParams.get('since') // ISO — only return newer orders
+  const orders = (db.orders ?? [])
+    .filter(o => o.restaurantId === restaurant.id)
+    .filter(o => since ? o.createdAt > since : true)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+
+  return NextResponse.json(orders)
+}
+
+// PATCH /api/restaurants/[slug]/orders — update order status { orderId, status }
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const res     = NextResponse.next()
+  const session = await getIronSession<SessionData>(req, res, sessionOptions)
+  if (!session.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const db = await readDb()
+  const restaurant =
+    db.restaurants.find(r => r.slug === params.slug) ??
+    db.restaurants.find(r => r.id   === params.slug)
+
+  if (!restaurant) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!canPerform(session, 'write', restaurant.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const body = await req.json().catch(() => null) as { orderId?: string; status?: string } | null
+  if (!body?.orderId || !['confirmed', 'rejected'].includes(body.status ?? '')) {
+    return NextResponse.json({ error: 'orderId and valid status required' }, { status: 422 })
+  }
+
+  const order = (db.orders ?? []).find(o => o.id === body.orderId && o.restaurantId === restaurant.id)
+  if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+
+  order.status = body.status as 'confirmed' | 'rejected'
+  await writeDb(db)
+
+  return NextResponse.json({ ok: true, order })
 }
 
 export async function POST(req: NextRequest, { params }: Params) {

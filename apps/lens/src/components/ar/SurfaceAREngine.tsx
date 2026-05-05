@@ -22,7 +22,7 @@ function scaleMeshToFit(obj: THREE.Object3D) {
 
 // ── WebXR surface mode ────────────────────────────────────────────────────────
 
-function WebXREngine() {
+function WebXREngine({ onFallback }: { onFallback: () => void }) {
   const { dishes, activeDishId } = useApp();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -140,12 +140,16 @@ function WebXREngine() {
       });
     }
 
-    run().catch(console.error);
+    run().catch(err => {
+      console.error('[AR] WebXR session failed, falling back to camera:', err);
+      onFallback();
+    });
 
     return () => {
       stopped = true;
       session?.end().catch(() => {});
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDish?.id, activeDish?.model]);
 
   return (
@@ -226,16 +230,19 @@ function CameraFallback() {
 // ── Public component: tries WebXR, falls back to camera overlay ───────────────
 
 export function SurfaceAREngine() {
-  const [useWebXR, setUseWebXR] = useState<boolean | null>(null); // null = checking
+  const [mode, setMode] = useState<'checking' | 'webxr' | 'camera'>('checking');
 
   useEffect(() => {
-    if (!navigator.xr) { setUseWebXR(false); return; }
+    // Require HTTPS for WebXR (localhost is allowed by browsers)
+    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (!isSecure || !navigator.xr) { setMode('camera'); return; }
+
     navigator.xr.isSessionSupported('immersive-ar')
-      .then(ok => setUseWebXR(ok))
-      .catch(() => setUseWebXR(false));
+      .then(ok => setMode(ok ? 'webxr' : 'camera'))
+      .catch(() => setMode('camera'));
   }, []);
 
-  if (useWebXR === null) {
+  if (mode === 'checking') {
     return (
       <div className="absolute inset-0 bg-black flex items-center justify-center">
         <div className="w-12 h-12 border-4 border-[#E23744] border-t-transparent rounded-full animate-spin" />
@@ -243,5 +250,9 @@ export function SurfaceAREngine() {
     );
   }
 
-  return useWebXR ? <WebXREngine /> : <CameraFallback />;
+  if (mode === 'webxr') {
+    return <WebXREngine onFallback={() => setMode('camera')} />;
+  }
+
+  return <CameraFallback />;
 }
