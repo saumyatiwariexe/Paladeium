@@ -11,7 +11,7 @@ export function AROverlayUI() {
   if (!activeDish) return null;
 
   return (
-    <div className="fixed inset-0 z-50 pointer-events-none flex flex-col justify-between p-5">
+    <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-5">
       {/* Top bar */}
       <div className="flex items-center justify-between pointer-events-auto">
         <button
