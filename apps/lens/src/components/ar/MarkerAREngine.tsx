@@ -6,27 +6,26 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useApp } from '@/lib/store';
 
 const MINDAR_CDN = 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js';
-const MODEL_SIZE = 0.12; // 12 cm — scaled to sit on a physical menu card
+const MODEL_SIZE = 0.12;
 
 type LoadState = 'loading' | 'scanning' | 'found' | 'error';
 
-// Types for MindAR (loaded from CDN, not a typed package)
 interface MindARThreeInstance {
   renderer: THREE.WebGLRenderer;
-  scene: THREE.Scene;
-  camera: THREE.Camera;
-  start: () => Promise<void>;
-  stop: () => void;
+  scene:    THREE.Scene;
+  camera:   THREE.Camera;
+  start:    () => Promise<void>;
+  stop:     () => void;
   addAnchor: (idx: number) => { group: THREE.Group };
 }
 type MindARThreeCtor = new (opts: {
-  container: HTMLElement;
-  imageTargetSrc: string;
-  uiLoading: string;
-  uiScanning: string;
-  uiError: string;
-  filterMinCF?: number;
-  filterBeta?: number;
+  container:       HTMLElement;
+  imageTargetSrc:  string;
+  uiLoading:       string;
+  uiScanning:      string;
+  uiError:         string;
+  filterMinCF?:    number;
+  filterBeta?:     number;
 }) => MindARThreeInstance;
 
 function scaleMeshToFit(obj: THREE.Object3D) {
@@ -41,6 +40,13 @@ function scaleMeshToFit(obj: THREE.Object3D) {
   obj.position.set(-center.x * s, -center.y * s + (size.y * s) / 2, -center.z * s);
 }
 
+function makeFallbackSphere(): THREE.Mesh {
+  return new THREE.Mesh(
+    new THREE.SphereGeometry(0.05, 32, 32),
+    new THREE.MeshStandardMaterial({ color: 0xe23744 }),
+  );
+}
+
 async function loadMindAR(): Promise<MindARThreeCtor> {
   const w = window as unknown as { MINDAR?: { IMAGE?: { MindARThree?: MindARThreeCtor } } };
   if (w.MINDAR?.IMAGE?.MindARThree) return w.MINDAR.IMAGE.MindARThree;
@@ -49,7 +55,7 @@ async function loadMindAR(): Promise<MindARThreeCtor> {
     if (document.querySelector(`script[src="${MINDAR_CDN}"]`)) { resolve(); return; }
     const s = document.createElement('script');
     s.src = MINDAR_CDN;
-    s.onload = () => resolve();
+    s.onload  = () => resolve();
     s.onerror = () => reject(new Error('Failed to load MindAR from CDN'));
     document.head.appendChild(s);
   });
@@ -62,22 +68,26 @@ async function loadMindAR(): Promise<MindARThreeCtor> {
 
 export function MarkerAREngine({ targetsUrl }: { targetsUrl: string }) {
   const { dishes, activeDishId, setViewMode } = useApp();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const engineRef = useRef<MindARThreeInstance | null>(null);
-  const [loadState, setLoadState] = useState<LoadState>('loading');
-  const [errorMsg, setErrorMsg] = useState('');
-
   const activeDish = dishes.find(d => d.id === activeDishId);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const engineRef    = useRef<MindARThreeInstance | null>(null);
+  const anchorRef    = useRef<THREE.Group | null>(null);
+  const loaderRef    = useRef<GLTFLoader>(new GLTFLoader());
+
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [errorMsg,  setErrorMsg]  = useState('');
+
+  // ── Engine lifecycle: start once per targetsUrl ───────────────────────────
   useEffect(() => {
-    if (!containerRef.current || !activeDish) return;
+    if (!containerRef.current) return;
 
     let stopped = false;
     const container = containerRef.current;
-    const dish = activeDish; // capture for async closure — activeDish may change
 
-    async function run() {
+    async function startEngine() {
       setLoadState('loading');
+      setErrorMsg('');
 
       let MindARThree: MindARThreeCtor;
       try {
@@ -95,73 +105,49 @@ export function MarkerAREngine({ targetsUrl }: { targetsUrl: string }) {
       const engine = new MindARThree({
         container,
         imageTargetSrc: targetsUrl,
-        uiLoading: 'no',
+        uiLoading:  'no',
         uiScanning: 'no',
-        uiError: 'no',
+        uiError:    'no',
         filterMinCF: 0.0001,
-        filterBeta: 0.001,
+        filterBeta:  0.001,
       });
       engineRef.current = engine;
 
       const { renderer, scene, camera } = engine;
 
-      // Lighting
       scene.add(new THREE.AmbientLight(0xffffff, 1.6));
       const dir = new THREE.DirectionalLight(0xffffff, 1.2);
       dir.position.set(1, 2, 1);
       scene.add(dir);
 
       const anchor = engine.addAnchor(0);
+      anchorRef.current = anchor.group;
 
-      // Load dish model
-      if (dish.model) {
-        try {
-          const loader = new GLTFLoader();
-          const gltf = await loader.loadAsync(dish.model);
-          if (!stopped) {
-            scaleMeshToFit(gltf.scene);
-            anchor.group.add(gltf.scene);
-          }
-        } catch {
-          if (!stopped) {
-            const mesh = new THREE.Mesh(
-              new THREE.SphereGeometry(0.05, 32, 32),
-              new THREE.MeshStandardMaterial({ color: 0xe23744 })
-            );
-            anchor.group.add(mesh);
-          }
-        }
-      } else {
-        const mesh = new THREE.Mesh(
-          new THREE.SphereGeometry(0.05, 32, 32),
-          new THREE.MeshStandardMaterial({ color: 0xe23744 })
-        );
-        anchor.group.add(mesh);
-      }
-
-      if (stopped) return;
-
-      setLoadState('scanning');
-
-      // Track anchor visibility to update UI
       let lastVisible = false;
       renderer.setAnimationLoop(() => {
         const visible = anchor.group.visible;
         if (visible !== lastVisible) {
           lastVisible = visible;
-          if (visible) setLoadState('found');
-          else setLoadState('scanning');
+          setLoadState(visible ? 'found' : 'scanning');
         }
         renderer.render(scene, camera);
       });
 
-      await engine.start();
+      try {
+        await engine.start();
+        if (!stopped) setLoadState('scanning');
+      } catch (err) {
+        if (!stopped) {
+          setLoadState('error');
+          setErrorMsg(err instanceof Error ? err.message : 'AR failed to start');
+        }
+      }
     }
 
-    run().catch(err => {
+    startEngine().catch(err => {
       if (!stopped) {
         setLoadState('error');
-        setErrorMsg(err instanceof Error ? err.message : 'AR failed to start');
+        setErrorMsg(err instanceof Error ? err.message : 'AR failed');
       }
     });
 
@@ -169,15 +155,41 @@ export function MarkerAREngine({ targetsUrl }: { targetsUrl: string }) {
       stopped = true;
       engineRef.current?.stop();
       engineRef.current = null;
+      anchorRef.current = null;
     };
-  }, [activeDish?.id, activeDish?.model, targetsUrl]);
+  }, [targetsUrl]); // only recreate engine when the targets file changes
+
+  // ── Model swap: runs whenever active dish changes (no engine restart) ─────
+  useEffect(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+
+    // Clear previous model
+    while (anchor.children.length > 0) anchor.remove(anchor.children[0]);
+
+    if (!activeDish) return;
+
+    if (activeDish.model) {
+      loaderRef.current.load(
+        activeDish.model,
+        gltf => {
+          if (anchorRef.current !== anchor) return; // engine was replaced
+          scaleMeshToFit(gltf.scene);
+          anchor.add(gltf.scene);
+        },
+        undefined,
+        () => { if (anchorRef.current === anchor) anchor.add(makeFallbackSphere()); },
+      );
+    } else {
+      anchor.add(makeFallbackSphere());
+    }
+  }, [activeDish?.id, activeDish?.model]);
 
   return (
     <div className="absolute inset-0">
-      {/* MindAR renders into this div — it creates its own canvas + video */}
+      {/* MindAR renders into this div — it creates its own camera + canvas */}
       <div ref={containerRef} className="absolute inset-0" />
 
-      {/* Status overlay */}
       {loadState === 'loading' && (
         <div className="absolute inset-0 bg-black flex flex-col items-center justify-center gap-4 pointer-events-none">
           <div className="w-12 h-12 border-4 border-[#E23744] border-t-transparent rounded-full animate-spin" />
@@ -200,8 +212,7 @@ export function MarkerAREngine({ targetsUrl }: { targetsUrl: string }) {
           <p className="text-white/50 text-[13px] mb-6">{errorMsg}</p>
           <button
             onClick={() => setViewMode('preview')}
-            className="px-8 h-12 bg-[#E23744] text-white rounded-xl font-black text-[14px]"
-          >
+            className="px-8 h-12 bg-[#E23744] text-white rounded-xl font-black text-[14px]">
             Go Back
           </button>
         </div>

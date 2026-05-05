@@ -7,6 +7,7 @@ import { readDb, writeDb } from '@/lib/db'
 import { generateInviteToken, inviteExpiry } from '@/lib/auth'
 import { sendInviteEmail } from '@/lib/email'
 import { canPerform, invitableRoles } from '@/lib/permissions'
+import { getBaseUrl } from '@/lib/url'
 import type { User } from '@/lib/types'
 
 const InviteSchema = z.object({
@@ -76,8 +77,7 @@ export async function POST(req: NextRequest) {
     await writeDb(db)
   }
 
-  const baseUrl   = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-  const inviteUrl = `${baseUrl}/invite/${token}`
+  const inviteUrl = `${getBaseUrl(req)}/invite/${token}`
 
   try {
     await sendInviteEmail(email, inviteUrl, role, restaurant?.name)

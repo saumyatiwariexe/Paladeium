@@ -18,6 +18,7 @@ function isPublic(pathname: string, method: string): boolean {
 
   if (method === 'OPTIONS') return true
   if (method === 'POST' && /^\/api\/restaurants\/[^/]+\/orders$/.test(pathname)) return true
+  if (method === 'GET'  && /^\/api\/restaurants\/[^/]+\/orders\/[^/]+$/.test(pathname)) return true
   if (method === 'POST' && pathname === '/api/track/event') return true
 
   return false
