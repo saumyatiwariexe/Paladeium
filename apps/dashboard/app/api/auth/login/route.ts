@@ -1,25 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getIronSession } from 'iron-session'
-import { timingSafeEqual } from 'crypto'
 import { z } from 'zod'
 import { sessionOptions, type SessionData } from '@/lib/session'
 import { checkLoginRateLimit } from '@/lib/ratelimit'
+import { verifyPassword } from '@/lib/auth'
+import { readDb } from '@/lib/db'
 
 const LoginSchema = z.object({
-  email: z.string().email().max(254),
+  email:    z.string().email().max(254),
   password: z.string().min(1).max(128),
 })
-
-function safeCompare(a: string, b: string): boolean {
-  const bufA = Buffer.from(a)
-  const bufB = Buffer.from(b)
-  // Always run comparison to prevent timing attacks on length difference
-  const result = timingSafeEqual(
-    Buffer.concat([bufA, Buffer.alloc(Math.max(0, bufB.length - bufA.length))]),
-    Buffer.concat([bufB, Buffer.alloc(Math.max(0, bufA.length - bufB.length))]),
-  )
-  return result && bufA.length === bufB.length
-}
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
@@ -32,26 +22,27 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const body = await req.json().catch(() => null)
+  const body   = await req.json().catch(() => null)
   const parsed = LoginSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
-  }
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
 
   const { email, password } = parsed.data
-  const validEmail = process.env.DASHBOARD_EMAIL ?? 'admin@paladeium.com'
-  const validPassword = process.env.DASHBOARD_PASSWORD ?? 'changeme'
+  const db   = await readDb()
+  const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase())
 
-  const emailOk = safeCompare(email, validEmail)
-  const passwordOk = safeCompare(password, validPassword)
-
-  if (!emailOk || !passwordOk) {
+  if (!user || user.status !== 'active' || !user.passwordHash) {
     return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
   }
 
-  const response = NextResponse.json({ ok: true })
-  const session = await getIronSession<SessionData>(req, response, sessionOptions)
-  session.isAdmin = true
+  const ok = await verifyPassword(password, user.passwordHash)
+  if (!ok) return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
+
+  const response = NextResponse.json({ ok: true, role: user.role })
+  const session  = await getIronSession<SessionData>(req, response, sessionOptions)
+  session.userId        = user.id
+  session.email         = user.email
+  session.role          = user.role
+  session.restaurantIds = user.restaurantIds
   await session.save()
 
   return response

@@ -1,18 +1,11 @@
 import fs from 'fs'
 import path from 'path'
-import type { Database, Restaurant, MenuCategory, MenuItem, Order } from './types'
+import type { Database, Restaurant, MenuCategory, MenuItem, Order, User } from './types'
 
-// Each restaurant lives in its own subdirectory:
-//   restaurants/[slug]/config.json
-//   restaurants/[slug]/categories.json
-//   restaurants/[slug]/items.json
-//   restaurants/[slug]/orders.json
-//   restaurants/[slug]/models/      ← GLB files served via API
-//   restaurants/[slug]/images/
-//   restaurants/[slug]/targets/
 const RESTAURANTS_DIR = path.join(process.cwd(), 'restaurants')
+const USERS_FILE      = path.join(process.cwd(), 'users.json')
 
-const EMPTY: Database = { restaurants: [], categories: [], items: [], orders: [] }
+const EMPTY: Database = { restaurants: [], categories: [], items: [], orders: [], users: [] }
 
 function hasRedis() {
   return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
@@ -41,7 +34,30 @@ function writeJsonSync(filePath: string, data: unknown) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
 }
 
-// ── File-based DB (per-restaurant directories) ────────────────
+// ── Superadmin bootstrap ─────────────────────────────────────
+// On first run with an empty users list, seed a superadmin from env vars.
+// Password is stored as plain "env:" prefix so login route handles it
+// without needing to hash at write time (hashing is async).
+
+function bootstrapSuperadmin(users: User[]): User[] {
+  if (users.length > 0) return users
+  const email = process.env.DASHBOARD_EMAIL ?? 'admin@paladeium.com'
+  const superadmin: User = {
+    id: 'superadmin-bootstrap',
+    email,
+    passwordHash: `env:${process.env.DASHBOARD_PASSWORD ?? 'changeme'}`,
+    role: 'superadmin',
+    restaurantIds: [],
+    status: 'active',
+    inviteToken: null,
+    inviteExpiry: null,
+    createdAt: new Date().toISOString(),
+    createdBy: null,
+  }
+  return [superadmin]
+}
+
+// ── File-based DB ─────────────────────────────────────────────
 
 function scaffoldRestaurantDirs(slug: string) {
   const dir = getRestaurantDir(slug)
@@ -52,7 +68,10 @@ function scaffoldRestaurantDirs(slug: string) {
 }
 
 function readFileDb(): Database {
-  if (!fs.existsSync(RESTAURANTS_DIR)) return structuredClone(EMPTY)
+  const rawUsers  = readJsonSync<User[]>(USERS_FILE, [])
+  const users     = bootstrapSuperadmin(rawUsers)
+
+  if (!fs.existsSync(RESTAURANTS_DIR)) return { ...structuredClone(EMPTY), users }
 
   let slugs: string[] = []
   try {
@@ -60,7 +79,7 @@ function readFileDb(): Database {
       fs.statSync(path.join(RESTAURANTS_DIR, entry)).isDirectory()
     )
   } catch {
-    return structuredClone(EMPTY)
+    return { ...structuredClone(EMPTY), users }
   }
 
   const restaurants: Restaurant[]  = []
@@ -78,17 +97,19 @@ function readFileDb(): Database {
     orders.push(...readJsonSync<Order[]>(path.join(dir, 'orders.json'), []))
   }
 
-  return { restaurants, categories, items, orders }
+  return { restaurants, categories, items, orders, users }
 }
 
 function writeFileDb(db: Database): void {
   ensureDir(RESTAURANTS_DIR)
 
+  // Users stored in a single global file
+  writeJsonSync(USERS_FILE, db.users ?? [])
+
   for (const restaurant of db.restaurants) {
     scaffoldRestaurantDirs(restaurant.slug)
     const dir = getRestaurantDir(restaurant.slug)
-
-    writeJsonSync(path.join(dir, 'config.json'), restaurant)
+    writeJsonSync(path.join(dir, 'config.json'),     restaurant)
     writeJsonSync(path.join(dir, 'categories.json'), db.categories.filter(c => c.restaurantId === restaurant.id))
     writeJsonSync(path.join(dir, 'items.json'),      db.items.filter(i => i.restaurantId === restaurant.id))
     writeJsonSync(path.join(dir, 'orders.json'),     (db.orders ?? []).filter(o => o.restaurantId === restaurant.id))
@@ -110,6 +131,8 @@ export async function readDb(): Promise<Database> {
       await redis.set('paladeium_db', seed)
       return seed
     }
+    // Migrate: ensure users array exists in older Redis snapshots
+    if (!stored.users) stored.users = bootstrapSuperadmin([])
     return stored
   }
   return readFileDb()

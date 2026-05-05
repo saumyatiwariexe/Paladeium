@@ -1,7 +1,11 @@
 import type { SessionOptions } from 'iron-session'
+import type { UserRole } from './types'
 
 export interface SessionData {
-  isAdmin?: boolean
+  userId?: string
+  email?: string
+  role?: UserRole
+  restaurantIds?: string[]
 }
 
 export const sessionOptions: SessionOptions = {

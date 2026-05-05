@@ -67,11 +67,28 @@ export interface Order {
   createdAt: string
 }
 
+export type UserRole = 'superadmin' | 'owner' | 'manager' | 'staff'
+export type UserStatus = 'invited' | 'active'
+
+export interface User {
+  id: string
+  email: string
+  passwordHash: string | null   // null until invite is accepted
+  role: UserRole
+  restaurantIds: string[]       // restaurants this user can access
+  status: UserStatus
+  inviteToken: string | null
+  inviteExpiry: string | null   // ISO datetime
+  createdAt: string
+  createdBy: string | null      // userId of inviter
+}
+
 export interface Database {
   restaurants: Restaurant[]
   categories: MenuCategory[]
   items: MenuItem[]
   orders: Order[]
+  users: User[]
 }
 
 // Shape consumed by the AR Lens
