@@ -19,7 +19,7 @@ function LoadingScreen() {
 }
 
 function MainContent() {
-  const { setDishes, setCategories, setRestaurant, dishes, viewMode } = useApp();
+  const { setDishes, setCategories, setRestaurant, dishes, restaurant, viewMode } = useApp();
 
   useEffect(() => {
     const slug = new URLSearchParams(window.location.search).get('r') || 'the-grand-spice';
@@ -39,7 +39,7 @@ function MainContent() {
     // the overflow-y:auto container, so position:fixed works correctly.
     <>
       <PreARScreen />
-      {viewMode === 'ar' && <ARSessionContainer />}
+      {viewMode === 'ar' && restaurant?.uiType === 'ar' && <ARSessionContainer />}
     </>
   );
 }

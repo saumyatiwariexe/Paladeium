@@ -1,9 +1,32 @@
 import { Dish, Restaurant } from './types';
 
-const DASHBOARD_API = process.env.NEXT_PUBLIC_DASHBOARD_URL ?? 'https://paladeium-lens.vercel.app';
+function getDashboardApiBase() {
+  const configured = process.env.NEXT_PUBLIC_DASHBOARD_URL?.trim();
+  if (configured) return configured.replace(/\/$/, '');
+
+  if (typeof window !== 'undefined') {
+    const { hostname, origin } = window.location;
+    if (/^(localhost|127\.0\.0\.1)$/.test(hostname)) {
+      return 'http://localhost:3000';
+    }
+    if (hostname.includes('menu.')) {
+      return origin.replace('://menu.', '://dashboard.');
+    }
+    if (hostname.includes('-lens.')) {
+      return origin.replace('-lens.', '-dashboard.');
+    }
+  }
+
+  return '';
+}
 
 export async function fetchRestaurantData(slug: string): Promise<{ menu: Dish[], restaurant: Restaurant, categories: string[] }> {
-  const res = await fetch(`${DASHBOARD_API}/api/restaurants/${slug}/menu`);
+  const dashboardApi = getDashboardApiBase();
+  if (!dashboardApi) {
+    throw new Error('Dashboard API URL is not configured');
+  }
+
+  const res = await fetch(`${dashboardApi}/api/restaurants/${slug}/menu`);
   if (!res.ok) throw new Error('Failed to fetch menu');
   
   const data = await res.json();
@@ -15,7 +38,7 @@ export async function fetchRestaurantData(slug: string): Promise<{ menu: Dish[],
     price: typeof item.price === 'number' ? '₹' + item.price : (item.price || ''),
     emoji: item.emoji || '🍽️',
     cat: (item.cat || 'other').toLowerCase(),
-    model: item.model ? (item.model.startsWith('http') ? item.model : `${DASHBOARD_API}${item.model}`) : null,
+    model: item.model ? (item.model.startsWith('http') ? item.model : `${dashboardApi}${item.model}`) : null,
     modelScale: item.modelScale || 1.0,
     hasAR: item.hasAR ?? false,
   }));

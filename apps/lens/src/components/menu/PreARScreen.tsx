@@ -18,6 +18,7 @@ export function PreARScreen() {
 
   const activeDish = dishes.find(d => d.id === activeDishId);
   const activeDishIndex = dishes.findIndex(d => d.id === activeDishId);
+  const arEnabled = restaurant?.uiType === 'ar' && !!activeDish?.hasAR;
   const cartCount = cart.reduce((a, i) => a + i.qty, 0);
   const cartTotal = cart.reduce((a, i) => {
     const p = parseFloat(i.dish.price.replace(/[^\d.]/g, ''));
@@ -140,7 +141,7 @@ export function PreARScreen() {
 
           {/* Action buttons */}
           <div className="flex gap-3">
-            {activeDish.hasAR && (
+            {arEnabled && (
               <button
                 onClick={() => setViewMode('ar')}
                 className="flex items-center justify-center gap-2 px-5 h-12 border-2 border-[#E23744] text-[#E23744] rounded-xl font-black text-[13px] active:scale-95 transition-transform"
