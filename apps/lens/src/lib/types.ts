@@ -14,6 +14,8 @@ export interface Restaurant {
   name: string;
   uiType: 'ar' | 'dynamic';
   paymentEnabled: boolean;
+  markerDetectionEnabled: boolean;
+  targetsUrl: string | null;
 }
 
 export interface AppState {

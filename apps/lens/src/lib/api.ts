@@ -27,6 +27,8 @@ export async function fetchRestaurantData(slug: string): Promise<{ menu: Dish[],
       name: data.restaurant?.name || 'Paladeium',
       uiType: data.restaurant?.uiType || 'dynamic',
       paymentEnabled: data.restaurant?.paymentEnabled || false,
+      markerDetectionEnabled: data.restaurant?.markerDetectionEnabled ?? true,
+      targetsUrl: data.restaurant?.targetsUrl ?? null,
     }
   };
 }
