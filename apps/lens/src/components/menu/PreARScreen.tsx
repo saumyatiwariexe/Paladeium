@@ -6,7 +6,6 @@ import { ModelCarousel } from '@/components/ar/ModelCarousel';
 import { CategoryPills } from './CategoryPills';
 import { MenuList } from './MenuList';
 import { CartPanel } from './CartPanel';
-import { ARSessionContainer } from '@/components/ar/ARSessionContainer';
 import {
   ShoppingCart, ChevronLeft, ChevronRight, Box, Plus, Star, MapPin, Clock,
 } from 'lucide-react';
@@ -14,7 +13,7 @@ import {
 export function PreARScreen() {
   const {
     restaurant, dishes, activeDishId, setActiveDish,
-    cart, cartOpen, setCartOpen, addToCart, setViewMode, viewMode,
+    cart, cartOpen, setCartOpen, addToCart, setViewMode,
   } = useApp();
 
   const activeDish = dishes.find(d => d.id === activeDishId);
@@ -200,9 +199,6 @@ export function PreARScreen() {
 
       {/* ── CART PANEL ── */}
       {cartOpen && <CartPanel />}
-
-      {/* ── AR OVERLAY ── */}
-      {viewMode === 'ar' && <ARSessionContainer />}
     </div>
   );
 }

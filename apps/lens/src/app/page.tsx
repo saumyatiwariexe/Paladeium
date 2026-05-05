@@ -4,6 +4,7 @@ import React, { useEffect, Suspense } from 'react';
 import { useApp } from '@/lib/store';
 import { fetchRestaurantData } from '@/lib/api';
 import { PreARScreen } from '@/components/menu/PreARScreen';
+import { ARSessionContainer } from '@/components/ar/ARSessionContainer';
 
 function LoadingScreen() {
   return (
@@ -18,13 +19,13 @@ function LoadingScreen() {
 }
 
 function MainContent() {
-  const { setDishes, setCategories, setRestaurant, dishes } = useApp();
+  const { setDishes, setCategories, setRestaurant, dishes, viewMode } = useApp();
 
   useEffect(() => {
     const slug = new URLSearchParams(window.location.search).get('r') || 'the-grand-spice';
     fetchRestaurantData(slug)
       .then(data => {
-        setDishes(data.menu);       // setDishes also calls setActiveDish(data.menu[0].id)
+        setDishes(data.menu);
         setCategories(data.categories);
         setRestaurant(data.restaurant);
       })
@@ -33,7 +34,14 @@ function MainContent() {
 
   if (dishes.length === 0) return <LoadingScreen />;
 
-  return <PreARScreen />;
+  return (
+    // Fragment root — AR overlay is a sibling of PreARScreen, NOT inside
+    // the overflow-y:auto container, so position:fixed works correctly.
+    <>
+      <PreARScreen />
+      {viewMode === 'ar' && <ARSessionContainer />}
+    </>
+  );
 }
 
 export default function Home() {
