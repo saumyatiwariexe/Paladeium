@@ -24,6 +24,7 @@ export async function fetchRestaurantData(slug: string): Promise<{ menu: Dish[],
     menu,
     categories: ['all', ...(data.categories || []).map((c: any) => c.name.toLowerCase())],
     restaurant: {
+      slug: data.restaurant?.slug || slug,
       name: data.restaurant?.name || 'Paladeium',
       uiType: data.restaurant?.uiType || 'dynamic',
       paymentEnabled: data.restaurant?.paymentEnabled || false,

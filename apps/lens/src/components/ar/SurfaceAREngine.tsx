@@ -4,16 +4,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useApp } from '@/lib/store';
-import { ARCanvas } from './ARCanvas';
 
-const MODEL_SIZE = 0.15;
+const XR_MODEL_SIZE  = 0.15; // meters — for WebXR hit-test placement
+const CAM_MODEL_SIZE = 0.65; // units  — for camera overlay view
 
-function scaleMeshToFit(obj: THREE.Object3D) {
+function scaleMeshToFit(obj: THREE.Object3D, targetSize: number) {
   const box = new THREE.Box3().setFromObject(obj);
   const size = new THREE.Vector3();
   box.getSize(size);
   const maxDim = Math.max(size.x, size.y, size.z);
-  const s = maxDim > 0.001 ? MODEL_SIZE / maxDim : 1;
+  const s = maxDim > 0.001 ? targetSize / maxDim : 1;
   obj.scale.setScalar(s);
   const center = new THREE.Vector3();
   box.getCenter(center);
@@ -24,7 +24,7 @@ function scaleMeshToFit(obj: THREE.Object3D) {
 
 function WebXREngine({ onFallback }: { onFallback: () => void }) {
   const { dishes, activeDishId } = useApp();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef  = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [placed, setPlaced] = useState(false);
 
@@ -34,7 +34,7 @@ function WebXREngine({ onFallback }: { onFallback: () => void }) {
     if (!canvasRef.current || !activeDish) return;
 
     const canvas = canvasRef.current;
-    const dish = activeDish; // capture for async closure
+    const dish   = activeDish;
     let session: XRSession | null = null;
     let stopped = false;
 
@@ -43,7 +43,7 @@ function WebXREngine({ onFallback }: { onFallback: () => void }) {
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.xr.enabled = true;
 
-      const scene = new THREE.Scene();
+      const scene  = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
       scene.add(new THREE.AmbientLight(0xffffff, 1.6));
@@ -51,7 +51,6 @@ function WebXREngine({ onFallback }: { onFallback: () => void }) {
       dir.position.set(1, 2, 1);
       scene.add(dir);
 
-      // Reticle ring shown on detected surface
       const reticle = new THREE.Mesh(
         new THREE.RingGeometry(0.03, 0.045, 32).rotateX(-Math.PI / 2),
         new THREE.MeshBasicMaterial({ color: 0xe23744, side: THREE.DoubleSide }),
@@ -60,16 +59,14 @@ function WebXREngine({ onFallback }: { onFallback: () => void }) {
       reticle.visible = false;
       scene.add(reticle);
 
-      // Model group placed on tap
       const modelGroup = new THREE.Group();
       modelGroup.visible = false;
       scene.add(modelGroup);
 
-      // Load dish model
       if (dish.model) {
         try {
           const gltf = await new GLTFLoader().loadAsync(dish.model);
-          scaleMeshToFit(gltf.scene);
+          scaleMeshToFit(gltf.scene, XR_MODEL_SIZE);
           modelGroup.add(gltf.scene);
         } catch {
           modelGroup.add(new THREE.Mesh(
@@ -98,7 +95,7 @@ function WebXREngine({ onFallback }: { onFallback: () => void }) {
       await renderer.xr.setSession(session);
 
       const viewerSpace = await session.requestReferenceSpace('viewer');
-      const refSpace = await session.requestReferenceSpace('local');
+      const refSpace    = await session.requestReferenceSpace('local');
       const hitTestSource = await (session as unknown as {
         requestHitTestSource: (o: { space: XRReferenceSpace }) => Promise<XRHitTestSource>;
       }).requestHitTestSource({ space: viewerSpace });
@@ -108,8 +105,7 @@ function WebXREngine({ onFallback }: { onFallback: () => void }) {
       session.addEventListener('select', () => {
         if (reticle.visible) {
           modelGroup.position.setFromMatrixPosition(reticle.matrix);
-          // Y-axis rotation to face the camera (XZ plane)
-          const pos = modelGroup.position.clone();
+          const pos    = modelGroup.position.clone();
           const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
           modelGroup.rotation.y = Math.atan2(camPos.x - pos.x, camPos.z - pos.z);
           modelGroup.visible = true;
@@ -120,7 +116,6 @@ function WebXREngine({ onFallback }: { onFallback: () => void }) {
 
       renderer.setAnimationLoop((_t: number, frame?: XRFrame) => {
         if (!frame || !refSpace || stopped) return;
-
         const results = frame.getHitTestResults(hitTestSource);
         if (results.length > 0) {
           const pose = results[0].getPose(refSpace);
@@ -131,13 +126,10 @@ function WebXREngine({ onFallback }: { onFallback: () => void }) {
         } else {
           if (!isPlaced) reticle.visible = false;
         }
-
         renderer.render(scene, camera);
       });
 
-      session.addEventListener('end', () => {
-        renderer.setAnimationLoop(null);
-      });
+      session.addEventListener('end', () => { renderer.setAnimationLoop(null); });
     }
 
     run().catch(err => {
@@ -156,75 +148,168 @@ function WebXREngine({ onFallback }: { onFallback: () => void }) {
     <>
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
       <div ref={overlayRef} className="absolute inset-0 pointer-events-none">
-        {!placed && (
-          <div className="absolute bottom-44 left-0 right-0 flex justify-center">
-            <div className="bg-black/70 px-5 py-3 rounded-2xl">
-              <p className="text-white font-black text-[13px]">Tap surface to place dish</p>
-            </div>
+        <div className="absolute bottom-44 left-0 right-0 flex justify-center">
+          <div className="bg-black/70 px-5 py-3 rounded-2xl">
+            <p className="text-white font-black text-[13px]">
+              {placed ? 'Tap again to reposition' : 'Point at a flat surface and tap to place'}
+            </p>
           </div>
-        )}
-        {placed && (
-          <div className="absolute bottom-44 left-0 right-0 flex justify-center">
-            <div className="bg-black/70 px-5 py-3 rounded-2xl">
-              <p className="text-white font-black text-[13px]">Tap again to reposition</p>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </>
   );
 }
 
-// ── Camera fallback (non-WebXR devices) ──────────────────────────────────────
+// ── Camera fallback — pure Three.js, no R3F ───────────────────────────────────
+// Using direct imperative Three.js avoids the R3F frozen-canvas issue on mobile.
 
 function CameraFallback() {
-  const { setViewMode } = useApp();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const [camReady, setCamReady] = useState(false);
+  const { dishes, activeDishId, setViewMode } = useApp();
+  const activeDish = dishes.find(d => d.id === activeDishId);
+
+  const mountRef  = useRef<HTMLDivElement>(null);
   const [denied, setDenied] = useState(false);
 
   useEffect(() => {
-    if (!navigator.mediaDevices?.getUserMedia) { setDenied(true); return; }
+    const container = mountRef.current;
+    if (!container) return;
 
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
-      .then(stream => {
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        setCamReady(true);
-      })
-      .catch(() => setDenied(true));
+    let animId  = 0;
+    let stream: MediaStream | null = null;
+    let alive   = true;
+
+    // ── Three.js renderer on transparent canvas ──────────────────────────
+    const W = container.clientWidth  || window.innerWidth;
+    const H = container.clientHeight || window.innerHeight;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(W, H);
+    renderer.setClearColor(0x000000, 0); // fully transparent background
+    renderer.domElement.style.cssText =
+      'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;';
+    container.appendChild(renderer.domElement);
+
+    const scene  = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, W / H, 0.01, 100);
+    camera.position.set(0, 0.1, 2.8);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 2.2));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+    sun.position.set(2, 5, 3);
+    scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xffeedd, 0.6);
+    fill.position.set(-3, -1, -2);
+    scene.add(fill);
+
+    const modelGroup = new THREE.Group();
+    modelGroup.scale.setScalar(0); // scale-in on load
+    scene.add(modelGroup);
+
+    // Load model
+    const loader = new GLTFLoader();
+    if (activeDish?.model) {
+      loader.load(
+        activeDish.model,
+        gltf => {
+          if (!alive) return;
+          scaleMeshToFit(gltf.scene, CAM_MODEL_SIZE);
+          modelGroup.add(gltf.scene);
+        },
+        undefined,
+        () => {
+          if (!alive) return;
+          modelGroup.add(new THREE.Mesh(
+            new THREE.SphereGeometry(0.35, 32, 32),
+            new THREE.MeshStandardMaterial({ color: 0xe23744, roughness: 0.4, metalness: 0.1 }),
+          ));
+        },
+      );
+    } else {
+      modelGroup.add(new THREE.Mesh(
+        new THREE.SphereGeometry(0.35, 32, 32),
+        new THREE.MeshStandardMaterial({ color: 0xe23744, roughness: 0.4, metalness: 0.1 }),
+      ));
+    }
+
+    // ── Camera stream ─────────────────────────────────────────────────────
+    if (navigator.mediaDevices?.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+        .then(s => {
+          if (!alive) { s.getTracks().forEach(t => t.stop()); return; }
+          stream = s;
+          const video = document.createElement('video');
+          video.srcObject = s;
+          video.autoplay = true;
+          video.playsInline = true;
+          video.muted = true;
+          video.style.cssText =
+            'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;';
+          // Insert video BEHIND the Three.js canvas
+          container.insertBefore(video, container.firstChild);
+        })
+        .catch(() => { if (alive) setDenied(true); });
+    } else {
+      setDenied(true);
+    }
+
+    // ── Resize handler ────────────────────────────────────────────────────
+    function onResize() {
+      const w = container!.clientWidth;
+      const h = container!.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', onResize);
+
+    // ── Animation loop ────────────────────────────────────────────────────
+    let t = 0;
+    let scaleT = 0;
+
+    function tick() {
+      animId = requestAnimationFrame(tick);
+      t      += 0.016;
+      scaleT  = Math.min(1, scaleT + 0.04);
+
+      // Ease-out scale-in
+      modelGroup.scale.setScalar(1 - Math.pow(1 - scaleT, 3));
+      // Gentle float + slow y-rotation
+      modelGroup.position.y = Math.sin(t * 1.1) * 0.06;
+      modelGroup.rotation.y = t * 0.45;
+
+      renderer.render(scene, camera);
+    }
+    tick();
 
     return () => {
-      streamRef.current?.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
+      alive = false;
+      cancelAnimationFrame(animId);
+      stream?.getTracks().forEach(t => t.stop());
+      window.removeEventListener('resize', onResize);
+      renderer.dispose();
+      // Clean up DOM nodes added imperatively
+      while (container.firstChild) container.removeChild(container.firstChild);
     };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDish?.id, activeDish?.model]);
 
   if (denied) {
     return (
       <div className="absolute inset-0 bg-[#1C1C1C] flex flex-col items-center justify-center p-8 text-center">
         <p className="text-white text-[18px] font-black mb-2">Camera access denied</p>
         <p className="text-white/50 text-[13px] mb-6">Allow camera permission and try again.</p>
-        <button onClick={() => setViewMode('preview')} className="px-8 h-12 bg-[#E23744] text-white rounded-xl font-black text-[14px]">
+        <button
+          onClick={() => setViewMode('preview')}
+          className="px-8 h-12 bg-[#E23744] text-white rounded-xl font-black text-[14px]">
           Go Back
         </button>
       </div>
     );
   }
 
-  return (
-    <>
-      <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
-      {camReady && <ARCanvas />}
-      {!camReady && (
-        <div className="absolute inset-0 bg-black flex items-center justify-center">
-          <div className="w-12 h-12 border-4 border-[#E23744] border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-    </>
-  );
+  return <div ref={mountRef} className="absolute inset-0" />;
 }
 
 // ── Public component: tries WebXR, falls back to camera overlay ───────────────
@@ -233,8 +318,11 @@ export function SurfaceAREngine() {
   const [mode, setMode] = useState<'checking' | 'webxr' | 'camera'>('checking');
 
   useEffect(() => {
-    // Require HTTPS for WebXR (localhost is allowed by browsers)
-    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    const isSecure =
+      location.protocol === 'https:' ||
+      location.hostname  === 'localhost' ||
+      location.hostname  === '127.0.0.1';
+
     if (!isSecure || !navigator.xr) { setMode('camera'); return; }
 
     navigator.xr.isSessionSupported('immersive-ar')

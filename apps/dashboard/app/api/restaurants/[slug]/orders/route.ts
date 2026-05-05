@@ -18,9 +18,9 @@ const OrderSchema = z.object({
   customer: z.object({
     name:    z.string().min(1).max(100).trim(),
     phone:   z.string().min(5).max(20).trim(),
-    address: z.string().min(1).max(300).trim(),
-    gender:  z.enum(['male', 'female', 'other', 'prefer_not']),
-    age:     z.number().int().min(1).max(120),
+    address: z.string().max(300).trim().optional().default(''),
+    gender:  z.enum(['male', 'female', 'other', 'prefer_not']).optional().default('prefer_not'),
+    age:     z.number().int().min(0).max(120).optional().default(0),
   }),
   items: z.array(z.object({
     id:    z.string(),

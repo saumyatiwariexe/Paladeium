@@ -11,6 +11,7 @@ export interface Dish {
 }
 
 export interface Restaurant {
+  slug: string;
   name: string;
   uiType: 'ar' | 'dynamic';
   paymentEnabled: boolean;
