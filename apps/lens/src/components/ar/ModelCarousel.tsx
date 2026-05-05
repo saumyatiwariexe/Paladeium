@@ -11,26 +11,30 @@ import * as THREE from 'three';
 const TARGET_SIZE = 1.8;
 
 function AutoScaleModel({ url }: { url: string }) {
-  const { scene } = useGLTF(url);
+  const { scene: rawScene } = useGLTF(url);
 
-  const { scale, offset } = useMemo(() => {
-    const box = new THREE.Box3().setFromObject(scene);
+  const { clonedScene, scale, offset } = useMemo(() => {
+    // Clone to get an independent Three.js object per render instance.
+    // useGLTF returns a shared singleton — two <primitive> elements sharing
+    // the same object causes parent-conflict glitches during key-based remounts.
+    const clonedScene = rawScene.clone(true);
+    const box = new THREE.Box3().setFromObject(clonedScene);
     const size = new THREE.Vector3();
     box.getSize(size);
     const center = new THREE.Vector3();
     box.getCenter(center);
     const maxDim = Math.max(size.x, size.y, size.z);
     const s = maxDim > 0.001 ? TARGET_SIZE / maxDim : 1;
-    // Centre horizontally/depth, keep bottom near ground
     return {
+      clonedScene,
       scale: s,
       offset: new THREE.Vector3(-center.x * s, -(center.y - size.y * 0.5) * s, -center.z * s),
     };
-  }, [scene]);
+  }, [rawScene]);
 
   return (
     <group position={[offset.x, offset.y, offset.z]}>
-      <primitive object={scene} scale={scale} />
+      <primitive object={clonedScene} scale={scale} />
     </group>
   );
 }

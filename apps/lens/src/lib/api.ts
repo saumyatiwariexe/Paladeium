@@ -1,6 +1,6 @@
 import { Dish, Restaurant } from './types';
 
-const DASHBOARD_API = 'https://paladeium-lens.vercel.app';
+const DASHBOARD_API = process.env.NEXT_PUBLIC_DASHBOARD_URL ?? 'https://paladeium-lens.vercel.app';
 
 export async function fetchRestaurantData(slug: string): Promise<{ menu: Dish[], restaurant: Restaurant, categories: string[] }> {
   const res = await fetch(`${DASHBOARD_API}/api/restaurants/${slug}/menu`);
