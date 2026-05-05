@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { AppState, Dish, Restaurant } from './types';
 
 interface AppContextType extends AppState {
@@ -19,23 +19,31 @@ interface AppContextType extends AppState {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [dishes, setDishesState] = useState<Dish[]>([]);
-  const [categories, setCategories] = useState<string[]>(['all']);
+  const [dishes, _setDishes]         = useState<Dish[]>([]);
+  const [categories, _setCategories] = useState<string[]>(['all']);
   const [activeDishId, setActiveDish] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'preview' | 'ar'>('preview');
-  const [cart, setCart] = useState<{ dish: Dish; qty: number }[]>([]);
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
-  const [cartOpen, setCartOpen] = useState(false);
+  const [viewMode, setViewMode]      = useState<'preview' | 'ar'>('preview');
+  const [cart, setCart]              = useState<{ dish: Dish; qty: number }[]>([]);
+  const [restaurant, _setRestaurant] = useState<Restaurant | null>(null);
+  const [cartOpen, setCartOpen]      = useState(false);
 
-  const setDishes = (newDishes: Dish[]) => {
-    setDishesState(newDishes);
-    if (newDishes.length > 0) {
-      setActiveDish(newDishes[0].id);
-    }
-  };
+  // Stable references — useCallback with [] ensures these never change identity,
+  // so useEffect deps in page.tsx don't re-fire on every render.
+  const setDishes = useCallback((newDishes: Dish[]) => {
+    _setDishes(newDishes);
+    if (newDishes.length > 0) setActiveDish(newDishes[0].id);
+  }, []);
 
-  const addToCart = (dish: Dish) => {
+  const setCategories = useCallback((cats: string[]) => {
+    _setCategories(cats);
+  }, []);
+
+  const setRestaurant = useCallback((res: Restaurant) => {
+    _setRestaurant(res);
+  }, []);
+
+  const addToCart = useCallback((dish: Dish) => {
     setCart(prev => {
       const existing = prev.find(item => item.dish.id === dish.id);
       if (existing) {
@@ -43,15 +51,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       return [...prev, { dish, qty: 1 }];
     });
-  };
+  }, []);
 
-  const updateQty = (id: string, delta: number) => {
+  const updateQty = useCallback((id: string, delta: number) => {
     setCart(prev =>
       prev
         .map(item => item.dish.id === id ? { ...item, qty: Math.max(0, item.qty + delta) } : item)
         .filter(item => item.qty > 0)
     );
-  };
+  }, []);
 
   return (
     <AppContext.Provider value={{

@@ -3,6 +3,8 @@ import { readDb } from '@/lib/db'
 import { generateRestaurantAnalytics } from '@/lib/analytics'
 import { generateRecommendations } from '@/lib/recommendations'
 
+export const dynamic = 'force-dynamic'
+
 type Params = { params: { id: string } }
 
 export async function GET(_req: NextRequest, { params }: Params) {

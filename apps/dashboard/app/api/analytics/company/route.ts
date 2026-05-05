@@ -3,6 +3,8 @@ import { readDb } from '@/lib/db'
 import { generateCompanyAnalytics } from '@/lib/analytics'
 import type { MenuItem } from '@/lib/types'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const db = await readDb()
